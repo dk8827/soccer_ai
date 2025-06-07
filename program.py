@@ -316,8 +316,8 @@ class Ball(Entity):
             self.velocity = lerp(self.velocity, Vec3(0,0,0), dt * 0.1)
 
 # Create entities & agents
-player_orange_entity = Player(position=(-10, 0, 0), color=color.orange, rotation_y=90)
-player_blue_entity = Player(position=(10, 0, 0), color=color.blue, rotation_y=-90)
+player_orange_entity = Player(position=(-15, 0, 0), color=color.orange, rotation_y=90)
+player_blue_entity = Player(position=(15, 0, 0), color=color.blue, rotation_y=-90)
 ball = Ball(position=(0,0,0))
 
 agent_orange = DQNAgent(player_orange_entity, player_blue_entity, ball, orange_goal, blue_goal, 'orange', DQN_CONFIG)
@@ -376,8 +376,8 @@ def calculate_base_reward(agent):
 
 def reset_positions():
     global episode_frame_count
-    player_orange_entity.position = (-10, 0, 0); player_orange_entity.rotation = (0, 90, 0)
-    player_blue_entity.position = (10, 0, 0); player_blue_entity.rotation = (0, -90, 0)
+    player_orange_entity.position = (-15, 0, 0); player_orange_entity.rotation = (0, 90, 0)
+    player_blue_entity.position = (15, 0, 0); player_blue_entity.rotation = (0, -90, 0)
     ball.position = (0, 0, 0); ball.velocity = Vec3(0,0,0)
     agent_orange.last_dist_to_ball = None; agent_blue.last_dist_to_ball = None
     episode_frame_count = 0
