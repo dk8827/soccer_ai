@@ -4,6 +4,7 @@ from ai import DQNAgent, device
 from game import Player, Ball
 import torch
 import math
+import random
 
 
 def rotate_vector(vec, angle_rad):
@@ -29,7 +30,9 @@ class EntityManager:
 
     def reset_episode(self):
         """Resets all entities to their starting positions for a new episode."""
-        self.ball.reset(position=Vec3(0, 0, 0))
+        max_z = GAME_CONFIG['FIELD_LENGTH'] / 2.5 # Give some margin from the walls
+        random_z = random.uniform(-max_z, max_z)
+        self.ball.reset(position=Vec3(0, 0, random_z))
         self.players[0].reset(position=Vec3(-15, 0, 0), rotation_y=90)
         self.players[1].reset(position=Vec3(15, 0, 0), rotation_y=-90)
 
