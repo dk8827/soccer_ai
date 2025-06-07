@@ -128,6 +128,11 @@ def start_new_game():
     update_score_ui()
     if GAME_CONFIG['SHOULD_RENDER']:
         update_timer_ui()
+        # Workaround for a rendering issue on macOS where the window may not
+        # update until user interaction. This forces a redraw.
+        if sys.platform == 'darwin':
+            window.size += (0, 1)
+            window.size -= (0, 1)
 
 # ----------------- MAIN UPDATE LOOP -----------------
 def update():
