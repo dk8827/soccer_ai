@@ -1,6 +1,6 @@
 # --- Game & Simulation Config ---
 GAME_CONFIG = {
-    'SHOULD_RENDER': True,
+    'SHOULD_RENDER': False,
     'FIELD_WIDTH': 40,
     'FIELD_LENGTH': 25,
     'GAME_TIMER_SECONDS': 60,

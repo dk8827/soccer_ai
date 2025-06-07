@@ -49,9 +49,13 @@ agent_player2.load_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player2.pth")
 
 # ----------------- UI -----------------
 score_display = Text(origin=(0,0), y=0.4, scale=1.5, background=True)
-timer_display = Text("00:00", origin=(0, -21), scale=1.5, background=True)
+timer_display = Text("00:00", origin=(0,0), y=0.35, scale=1.2, background=True)
 def update_score_ui():
     score_display.text = f"<orange>{score['player1']}<default> - <azure>{score['player2']}"
+
+def update_timer_ui():
+    mins, secs = divmod(time_left, 60)
+    timer_display.text = f"Time: {int(mins):02}:{int(secs):02}"
 
 # ----------------- GAME LOGIC -----------------
 camera.position = (0, 55, -55); camera.rotation = (45, 0, 0)
@@ -65,6 +69,8 @@ def start_new_game():
     reset_positions(player1_entity, player2_entity, ball, agent_player1, agent_player2)
     episode_frame_count = 0
     update_score_ui()
+    if GAME_CONFIG['SHOULD_RENDER']:
+        update_timer_ui()
 
 # ----------------- MAIN UPDATE LOOP -----------------
 def update():
@@ -79,8 +85,7 @@ def update():
         time_left = 0
         game_over = True
     if GAME_CONFIG['SHOULD_RENDER']:
-        mins, secs = divmod(time_left, 60)
-        timer_display.text = f"{int(mins):02}:{int(secs):02}"
+        update_timer_ui()
 
     # --- AI STEP ---
     state_player1 = agent_player1.get_state()
