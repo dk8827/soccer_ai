@@ -248,12 +248,7 @@ def calculate_rewards(ctx: RewardContext):
         rewards[team] = 0
 
         # --- Penalties (applied first) ---
-        rewards[team] += DQN_CONFIG['PENALTY_TIME']
         
-        # New escalating inactivity penalty
-        inactivity_penalty = agent.time_since_last_touch * DQN_CONFIG['PENALTY_INACTIVITY_SCALE']
-        rewards[team] += inactivity_penalty
-
         # Calculate proximity reward and create a new distance tracking dict
         prox_reward, new_dist = _calculate_proximity_reward(
             player.position, 
@@ -262,6 +257,9 @@ def calculate_rewards(ctx: RewardContext):
         )
         rewards[team] += prox_reward
         new_dists_to_ball[team] = new_dist
+        
+        # Penalize distance from the ball
+        rewards[team] += new_dist * DQN_CONFIG['PENALTY_BALL_DISTANCE_SCALE']
 
     # 2. Kick rewards
     if ctx.hit_info and ctx.hit_info.hit:

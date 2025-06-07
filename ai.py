@@ -54,7 +54,6 @@ class DQNAgent:
         self.max_reward = -float('inf') # Track the highest reward seen
         self.reward_history = deque(maxlen=500) # For calculating average reward
         self.noise_scale = 0.0
-        self.time_since_last_touch = 0.0
         
         self.state_size = state_size
         self.action_size = action_size

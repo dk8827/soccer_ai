@@ -69,7 +69,6 @@ class AgentManager:
         # Apply new noise for the upcoming episode
         for agent in self.agents:
             agent.apply_noise()
-            agent.time_since_last_touch = 0.0
 
     def _get_state_for_agent(self, player, opponent, ball, own_goal, opp_goal):
         """

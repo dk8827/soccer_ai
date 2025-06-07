@@ -60,7 +60,6 @@ DQN_CONFIG = {
     'REWARD_KICK_TOWARDS_GOAL': 300,
     'REWARD_MOVE_TO_BALL_SCALE': 20,
     'REWARD_DEFENSIVE_POS': 0.1,
-    'PENALTY_TIME': -0.01,
-    'PENALTY_INACTIVITY_SCALE': -0.05, # Penalty per second of not touching the ball
+    'PENALTY_BALL_DISTANCE_SCALE': -1,     # Penalty per unit of distance from the ball
     'PENALTY_CONCEDE': -100,
 } 
