@@ -139,6 +139,7 @@ class GameManager:
         self.TOTAL_FRAMES += 1
         self.episode_frame_count += 1
         self.agent_manager.update_learning(states, actions, rewards, done, self.TOTAL_FRAMES)
+        self.ui_manager.update_reward_displays(self.agent_manager.agents)
 
         # 5. Check for episode end
         if done:

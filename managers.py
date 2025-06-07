@@ -147,7 +147,10 @@ class AgentManager:
 
         for i, agent in enumerate(self.agents):
             reward_tensor = torch.tensor([rewards[agent.team_name]], device=device)
+            current_reward = rewards[agent.team_name]
             agent.memory.push(states[i], actions[i], next_states[i], reward_tensor)
+            agent.max_reward = max(agent.max_reward, current_reward)
+            agent.reward_history.append(current_reward)
 
         if total_frames % DQN_CONFIG['UPDATE_EVERY'] == 0:
             for agent in self.agents:

@@ -8,6 +8,10 @@ class UIManager:
             self.score_display = None
             self.timer_display = None
             self.no_touch_timer_display = None
+            self.p1_max_reward_display = None
+            self.p2_max_reward_display = None
+            self.p1_avg_reward_display = None
+            self.p2_avg_reward_display = None
             self.start_button = None
             return
 
@@ -38,6 +42,42 @@ class UIManager:
             background=False
         )
         
+        self.p1_max_reward_display = Text(
+            "P1 Max Reward: 0.0",
+            origin=(-.5, 0),
+            position=(-0.85, 0.45),
+            scale=1.0,
+            color=color.orange,
+            background=False
+        )
+
+        self.p2_max_reward_display = Text(
+            "P2 Max Reward: 0.0",
+            origin=(.5, 0),
+            position=(0.85, 0.45),
+            scale=1.0,
+            color=color.azure,
+            background=False
+        )
+        
+        self.p1_avg_reward_display = Text(
+            "P1 Avg Reward: 0.0",
+            origin=(-.5, 0),
+            position=(-0.85, 0.40),
+            scale=1.0,
+            color=color.orange,
+            background=False
+        )
+
+        self.p2_avg_reward_display = Text(
+            "P2 Avg Reward: 0.0",
+            origin=(.5, 0),
+            position=(0.85, 0.40),
+            scale=1.0,
+            color=color.azure,
+            background=False
+        )
+
         self.update_score({'player1': 0, 'player2': 0}) # Initialize score text
 
         # Improved start button styling
@@ -63,6 +103,13 @@ class UIManager:
         if not self.no_touch_timer_display: return
         self.no_touch_timer_display.text = f"No Touch: {int(time_left):02}"
 
+    def update_reward_displays(self, agents):
+        if not self.p1_max_reward_display: return # Assume others are also None
+        self.p1_max_reward_display.text = f"P1 Max Reward: {agents[0].max_reward:.4f}"
+        self.p2_max_reward_display.text = f"P2 Max Reward: {agents[1].max_reward:.4f}"
+        self.p1_avg_reward_display.text = f"P1 Avg Reward: {agents[0].average_reward:.4f}"
+        self.p2_avg_reward_display.text = f"P2 Avg Reward: {agents[1].average_reward:.4f}"
+
     def destroy_start_button(self):
         if self.start_button:
             destroy(self.start_button)
@@ -75,4 +122,12 @@ class UIManager:
             destroy(self.timer_display)
         if self.no_touch_timer_display:
             destroy(self.no_touch_timer_display)
+        if self.p1_max_reward_display:
+            destroy(self.p1_max_reward_display)
+        if self.p2_max_reward_display:
+            destroy(self.p2_max_reward_display)
+        if self.p1_avg_reward_display:
+            destroy(self.p1_avg_reward_display)
+        if self.p2_avg_reward_display:
+            destroy(self.p2_avg_reward_display)
         self.destroy_start_button() 

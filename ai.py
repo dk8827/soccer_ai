@@ -45,6 +45,8 @@ class DQNAgent:
     def __init__(self, team_name, config, state_size, action_size):
         self.team_name = team_name
         self.config = config
+        self.max_reward = -float('inf') # Track the highest reward seen
+        self.reward_history = deque(maxlen=500) # For calculating average reward
         
         self.state_size = state_size
         self.action_size = action_size
@@ -56,6 +58,12 @@ class DQNAgent:
         self.target_net = DQN(self.state_size, self.action_size).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.config['LR'], amsgrad=True)
+
+    @property
+    def average_reward(self):
+        if not self.reward_history:
+            return 0.0
+        return sum(self.reward_history) / len(self.reward_history)
 
     def select_action(self, state):
         sample = random.random()
