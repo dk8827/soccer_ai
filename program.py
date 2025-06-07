@@ -2,6 +2,7 @@ from ursina import *
 import sys
 import math
 from panda3d.core import Quat
+import time as a_different_time # Use a different alias to avoid conflict with ursina's time module
 
 # --- New Imports for AI ---
 import torch
@@ -21,7 +22,14 @@ def cross(v1, v2):
     )
 
 # ----------------- GAME SETUP -----------------
-app = Ursina()
+# We set render mode to False to speed up training significantly.
+# Set to True if you want to watch the games.
+SHOULD_RENDER = True
+if not SHOULD_RENDER:
+    app = Ursina(headless=True)
+else:
+    app = Ursina()
+
 
 window.title = 'AI Cube Soccer 3D'
 window.borderless = False
@@ -31,10 +39,14 @@ window.fps_counter.enabled = True
 
 FIELD_WIDTH = 40
 FIELD_LENGTH = 25
+# Global state variables that will be reset each game
 score = {'orange': 0, 'blue': 0}
 game_over = False
-GAME_TIMER_SECONDS = 180
+# MODIFIED: Shortened game time for faster simulation of 100 games.
+GAME_TIMER_SECONDS = 60
 time_left = GAME_TIMER_SECONDS
+game_number = 0
+NUM_GAMES = 100
 
 # ----------------- DEEP Q-LEARNING SETUP -----------------
 
@@ -82,24 +94,23 @@ class DQNAgent:
         self.own_goal = own_goal
         self.opp_goal = opp_goal
         self.team_name = team_name
-        
+
         # Hyperparameters
         self.BATCH_SIZE = 128
         self.GAMMA = 0.99  # Discount factor
         self.EPS_START = 0.9
         self.EPS_END = 0.05
-        self.EPS_DECAY = 10000 # Higher number means slower decay
+        self.EPS_DECAY = 20000 # Higher number means slower decay
         self.TAU = 0.005 # Target network update rate
         self.LR = 1e-4 # Learning Rate
-        self.MEMORY_CAPACITY = 20000
+        self.MEMORY_CAPACITY = 50000
 
         # AI state
         self.state_size = 12 # The number of inputs to the network
-        self.action_size = 3 # Left, Right, Forward
+        self.action_size = 3 # Turn Left, Turn Right, Move Forward
         self.steps_done = 0
-        self.last_dist_to_ball = 0
-        self.last_state = None
-        self.last_action = None
+        # NEW: Store last distance to ball for reward shaping
+        self.last_dist_to_ball = None
 
         # DQN setup
         self.policy_net = DQN(self.state_size, self.action_size).to(device)
@@ -115,7 +126,7 @@ class DQNAgent:
         norm_l = FIELD_LENGTH / 2
 
         p_pos = self.player.position
-        
+
         # Relative vectors, normalized
         vec_to_ball = (self.ball.position - p_pos) / Vec3(norm_w, 1, norm_l)
         vec_to_opp_goal = (self.opp_goal.position - p_pos) / Vec3(norm_w, 1, norm_l)
@@ -144,12 +155,9 @@ class DQNAgent:
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * \
             math.exp(-1. * self.steps_done / self.EPS_DECAY)
         self.steps_done += 1
-        
+
         if sample > eps_threshold:
             with torch.no_grad():
-                # t.max(1) will return the largest column value of each row.
-                # second column on max result is index of where max element was
-                # found, so we pick action with the larger expected reward.
                 return self.policy_net(state).max(1)[1].view(1, 1)
         else:
             return torch.tensor([[random.randrange(self.action_size)]], device=device, dtype=torch.long)
@@ -158,45 +166,30 @@ class DQNAgent:
         """Performs one step of the optimization (on the policy network)."""
         if len(self.memory) < self.BATCH_SIZE:
             return
-            
+
         transitions = self.memory.sample(self.BATCH_SIZE)
-        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation). This converts batch-array of Transitions
-        # to Transition of batch-arrays.
         batch = Transition(*zip(*transitions))
 
-        # Compute a mask of non-final states and concatenate the batch elements
         non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=device, dtype=torch.bool)
         non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
-        
+
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of actions taken. These are the actions which would've been taken
-        # for each batch state according to policy_net
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
-        # Compute V(s_{t+1}) for all next states.
-        # Expected values of actions for non_final_next_states are computed based
-        # on the "older" target_net; selecting their best reward with max(1)[0].
-        # This is merged based on the mask, such that we'll have either the expected
-        # state value or 0 in case the state was final.
         next_state_values = torch.zeros(self.BATCH_SIZE, device=device)
         with torch.no_grad():
             next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0]
-        # Compute the expected Q values
+
         expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
 
-        # Compute Huber loss
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
-        # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
@@ -213,22 +206,25 @@ class DQNAgent:
         action_id = action.item()
         turn_speed = 180
         move_speed = 10
+        dt = time.dt
+        if dt == 0: return # Avoid movement on the first frame of a step
+
         if action_id == 0: # Turn Left
-            self.player.rotation_y -= turn_speed * time.dt
+            self.player.rotation_y -= turn_speed * dt
         elif action_id == 1: # Turn Right
-            self.player.rotation_y += turn_speed * time.dt
+            self.player.rotation_y += turn_speed * dt
         elif action_id == 2: # Move Forward
-            self.player.position += self.player.forward * time.dt * move_speed
-        
+            self.player.position += self.player.forward * dt * move_speed
+
         # Clamp player position
         self.player.x = clamp(self.player.x, -FIELD_WIDTH/2, FIELD_WIDTH/2)
         self.player.z = clamp(self.player.z, -FIELD_LENGTH/2, FIELD_LENGTH/2)
-        
+
     def save_model(self, path):
         """Saves the policy network weights."""
         print(f"Saving model for {self.team_name} to {path}")
         torch.save(self.policy_net.state_dict(), path)
-    
+
     def load_model(self, path):
         """Loads weights into both policy and target networks."""
         if os.path.exists(path):
@@ -239,8 +235,8 @@ class DQNAgent:
             print(f"No model found for {self.team_name} at {path}, starting fresh.")
 
 # ----------------- ENVIRONMENT -----------------
-# The ground/field
 ground = Entity(model='quad', texture='assets/grid_texture.png', scale=(FIELD_WIDTH, FIELD_LENGTH), rotation_x=90, collider='box', y=-0.5)
+# ... Walls and goal frames setup (unchanged)
 wall_texture = 'assets/wall_texture.png'
 wall_height = 12
 goal_width = 20
@@ -255,7 +251,6 @@ Entity(model='cube', texture=wall_texture, scale=(1, wall_height, wall_segment_l
 Entity(model='cube', texture=wall_texture, scale=(1, 1.25, goal_width), position=(-FIELD_WIDTH/2 - 0.5, 10.875, 0), collider='box')
 Entity(model='cube', texture=wall_texture, scale=(1, 1.25, goal_width), position=(FIELD_WIDTH/2 + 0.5, 10.875, 0), collider='box')
 
-# ----------------- GOAL CLASS -----------------
 class Goal(Entity):
     def __init__(self, clr, **kwargs):
         super().__init__(**kwargs)
@@ -272,11 +267,9 @@ orange_goal = Goal(clr='orange', position=(-FIELD_WIDTH/2 - 0.5, 0, 0), rotation
 blue_goal = Goal(clr='blue', position=(FIELD_WIDTH/2 + 0.5, 0, 0), rotation_y=90)
 
 
-# ----------------- PLAYER AND BALL CLASSES -----------------
 class Player(Entity):
     def __init__(self, **kwargs):
         super().__init__(model='cube', scale=1.8, collider='box', **kwargs)
-        # Eyes for direction
         eye_dist = 0.25; eye_y = 0.2; eye_z_offset = 0.51
         Entity(parent=self, model='sphere', color=color.white, scale=0.3, position=(-eye_dist, eye_y, eye_z_offset))
         Entity(parent=self, model='sphere', color=color.black, scale=0.15, position=(-eye_dist, eye_y, eye_z_offset + 0.01))
@@ -290,8 +283,11 @@ class Ball(Entity):
         self.gravity = -9.8
 
     def update(self):
+        dt = time.dt
+        if dt == 0: return
+
         if self.velocity.xz.length_squared() > 0:
-            distance = self.velocity.xz.length() * time.dt
+            distance = self.velocity.xz.length() * dt
             radius = self.scale.x / 2
             rotation_amount = (distance / radius) * (180 / math.pi)
             rotation_axis = cross(self.velocity, Vec3(0, 1, 0)).normalized()
@@ -299,9 +295,9 @@ class Ball(Entity):
             q.setFromAxisAngle(rotation_amount, rotation_axis)
             self.quaternion = q * self.quaternion
 
-        self.velocity.y += self.gravity * time.dt
-        self.position += self.velocity * time.dt
-        
+        self.velocity.y += self.gravity * dt
+        self.position += self.velocity * dt
+
         ground_level = ground.y + self.scale.y/2
         if self.y < ground_level:
             self.y = ground_level
@@ -314,13 +310,13 @@ class Ball(Entity):
         if abs(self.z) > FIELD_LENGTH/2:
             self.velocity.z *= -0.9
             self.z = math.copysign(FIELD_LENGTH/2, self.z)
-            
+
         on_ground = self.y <= ground_level + 0.01
         if on_ground:
-            self.velocity.xz = lerp(self.velocity.xz, Vec2(0,0), time.dt * 1.0)
+            self.velocity.xz = lerp(self.velocity.xz, Vec2(0,0), dt * 1.0)
             if abs(self.velocity.y) < 1: self.velocity.y = 0
         else:
-            self.velocity = lerp(self.velocity, Vec3(0,0,0), time.dt * 0.1)
+            self.velocity = lerp(self.velocity, Vec3(0,0,0), dt * 0.1)
 
 # Create the entities
 player_orange_entity = Player(position=(-10, 0, 0), color=color.orange, rotation_y=90)
@@ -337,8 +333,8 @@ agent_blue.load_model("dqn_soccer_blue.pth")
 
 # ----------------- UI -----------------
 score_display = Text(origin=(0,0), y=0.4, scale=1.5, background=True)
-timer_display = Text("03:00", origin=(0, -21), scale=1.5, background=True)
-game_over_text = Text("", origin=(0,0), scale=3, background=True)
+timer_display = Text("00:00", origin=(0, -21), scale=1.5, background=True)
+game_over_text = Text("", origin=(0,0), scale=3, background=True) # Not used, but can be
 def update_score_ui():
     score_display.text = f"<orange>{score['orange']}<default> - <azure>{score['blue']}"
 
@@ -346,83 +342,114 @@ def update_score_ui():
 camera.position = (0, 55, -55); camera.rotation = (45, 0, 0)
 episode_frame_count = 0
 TOTAL_FRAMES = 0
-SAVE_INTERVAL = 50000 # Save models every 50k frames
+SAVE_INTERVAL = 50000
 
 def input(key):
     if key == 'escape':
-        # Save models on exit
+        print("--- Simulation ended by user. Saving models... ---")
         agent_orange.save_model("dqn_soccer_orange.pth")
         agent_blue.save_model("dqn_soccer_blue.pth")
         sys.exit()
 
 def reset_positions():
-    """Resets players and ball to starting positions."""
+    """Resets players and ball to starting positions for a new episode (after a goal)."""
     player_orange_entity.position = (-10, 0, 0); player_orange_entity.rotation = (0, 90, 0)
     player_blue_entity.position = (10, 0, 0); player_blue_entity.rotation = (0, -90, 0)
     ball.position = (0, 0, 0)
     ball.velocity = Vec3(0,0,0)
+
+    # Reset agent's memory of last distance for fair reward calculation
+    agent_orange.last_dist_to_ball = None
+    agent_blue.last_dist_to_ball = None
+
     global episode_frame_count
     episode_frame_count = 0
+
+def start_new_game():
+    """Resets the entire game state for a new match."""
+    global score, time_left, game_over
+    print(f"--- Starting Game {game_number + 1}/{NUM_GAMES} ---")
+    score = {'orange': 0, 'blue': 0}
+    time_left = GAME_TIMER_SECONDS
+    game_over = False
+    reset_positions()
+    update_score_ui()
 
 def update():
     global time_left, game_over, score, episode_frame_count, TOTAL_FRAMES
     if game_over: return
 
+    dt = time.dt
+    if dt == 0: return
+
     # --- TIMER LOGIC ---
-    time_left -= time.dt
+    time_left -= dt
     if time_left <= 0:
         time_left = 0
-        game_over = True
-        # End of game logic here...
-        invoke(sys.exit, delay=5)
-    mins, secs = divmod(time_left, 60)
-    timer_display.text = f"{int(mins):02}:{int(secs):02}"
+        game_over = True # End the game, the main loop will handle the rest
+    
+    if SHOULD_RENDER:
+        mins, secs = divmod(time_left, 60)
+        timer_display.text = f"{int(mins):02}:{int(secs):02}"
 
     # --- AI LOGIC: State, Action, Reward, Learn ---
-    
-    # 1. Get current state for both agents
     state_orange = agent_orange.get_state()
     state_blue = agent_blue.get_state()
-    
-    # 2. Select and perform an action for both agents
+
     action_orange = agent_orange.select_action(state_orange)
     action_blue = agent_blue.select_action(state_blue)
     agent_orange.move_player(action_orange)
     agent_blue.move_player(action_blue)
 
-    # Store old ball distances for reward calculation
+    # --- REWARD CALCULATION ---
+    # Start with a small penalty for each frame to encourage fast goals
+    reward_orange = -0.01
+    reward_blue = -0.01
+
+    # INCENTIVE: Reward agents for getting closer to the ball
+    current_dist_orange_to_ball = distance_xz(player_orange_entity.position, ball.position)
+    if agent_orange.last_dist_to_ball is not None:
+        reward_orange += (agent_orange.last_dist_to_ball - current_dist_orange_to_ball)
+    agent_orange.last_dist_to_ball = current_dist_orange_to_ball
+
+    current_dist_blue_to_ball = distance_xz(player_blue_entity.position, ball.position)
+    if agent_blue.last_dist_to_ball is not None:
+        reward_blue += (agent_blue.last_dist_to_ball - current_dist_blue_to_ball)
+    agent_blue.last_dist_to_ball = current_dist_blue_to_ball
+
+    # Store ball distances to goals *before* collision for reward calculation
     prev_ball_dist_to_blue_goal = distance_xz(ball.position, blue_goal.position)
-    
+    prev_ball_dist_to_orange_goal = distance_xz(ball.position, orange_goal.position)
+
     # --- COLLISION LOGIC ---
-    reward_orange = -0.1 # Small penalty for existing
-    reward_blue = -0.1
-    
     hit_info = ball.intersects()
     if hit_info.hit:
+        kick_strength = 15
+        kick_lift = 4
         if hit_info.entity == player_orange_entity:
-            ball.velocity = player_orange_entity.forward * 15 + Vec3(0, 4, 0)
+            ball.velocity = player_orange_entity.forward * kick_strength + Vec3(0, kick_lift, 0)
             reward_orange += 5 # Reward for touching the ball
-            # Bigger reward for kicking towards goal
+            # Bigger reward for kicking towards opponent's goal
             new_ball_dist_to_blue_goal = distance_xz(ball.position, blue_goal.position)
             if new_ball_dist_to_blue_goal < prev_ball_dist_to_blue_goal:
                 reward_orange += 10
-        
+
         elif hit_info.entity == player_blue_entity:
-            ball.velocity = player_blue_entity.forward * 15 + Vec3(0, 4, 0)
+            ball.velocity = player_blue_entity.forward * kick_strength + Vec3(0, kick_lift, 0)
             reward_blue += 5
-            # Bigger reward for kicking towards goal
+            # Bigger reward for kicking towards opponent's goal
             new_ball_dist_to_orange_goal = distance_xz(ball.position, orange_goal.position)
-            if new_ball_dist_to_orange_goal < distance_xz(player_blue_entity.position, orange_goal.position):
+            if new_ball_dist_to_orange_goal < prev_ball_dist_to_orange_goal: # FIXED: Compare to previous ball distance
                  reward_blue += 10
 
-    # --- GOAL LOGIC ---
+    # --- GOAL LOGIC (ends an episode, but not the game) ---
     done = False
     if ball.intersects(blue_goal.trigger).hit:
         score['orange'] += 1
         reward_orange += 100
         reward_blue -= 100
         done = True
-    
+
     if ball.intersects(orange_goal.trigger).hit:
         score['blue'] += 1
         reward_blue += 100
@@ -430,34 +457,55 @@ def update():
         done = True
 
     # --- LEARNING STEP ---
-    # 3. Get the next state
     next_state_orange = agent_orange.get_state() if not done else None
     next_state_blue = agent_blue.get_state() if not done else None
 
-    # 4. Store the transition in memory
     agent_orange.memory.push(state_orange, action_orange, next_state_orange, torch.tensor([reward_orange], device=device))
     agent_blue.memory.push(state_blue, action_blue, next_state_blue, torch.tensor([reward_blue], device=device))
 
-    # 5. Perform one step of the optimization
     agent_orange.optimize_model()
     agent_blue.optimize_model()
 
-    # 6. Soft update the target network
     agent_orange.update_target_net()
     agent_blue.update_target_net()
-    
-    # --- EPISODE AND GLOBAL COUNTERS ---
+
+    # --- COUNTERS ---
     episode_frame_count += 1
     TOTAL_FRAMES += 1
-
-    if TOTAL_FRAMES % SAVE_INTERVAL == 0:
-        agent_orange.save_model("dqn_soccer_orange.pth")
-        agent_blue.save_model("dqn_soccer_blue.pth")
+    if TOTAL_FRAMES > 0 and TOTAL_FRAMES % SAVE_INTERVAL == 0:
+        agent_orange.save_model(f"dqn_soccer_orange_{TOTAL_FRAMES}.pth")
+        agent_blue.save_model(f"dqn_soccer_blue_{TOTAL_FRAMES}.pth")
 
     if done:
-        update_score_ui()
+        if SHOULD_RENDER:
+            update_score_ui()
         reset_positions()
 
-# Initial call to set up UI
-update_score_ui()
-app.run()
+def run_simulation(num_games_to_play):
+    """
+    Main loop to run multiple games, handle resets, and print stats.
+    """
+    global game_number, game_over
+    for i in range(num_games_to_play):
+        game_number = i
+        start_new_game()
+
+        # This loop runs one full game until the timer runs out
+        while not game_over:
+            # The app.step() function processes one frame, including calling our update() function
+            app.step()
+
+        # Game has finished, print the statistics
+        print(f"Game {game_number + 1} Finished. Final Score: <orange>Orange {score['orange']}<default> - <azure>Blue {score['blue']}<default>")
+        print("-" * 40)
+        # Add a small delay to make console output readable between games
+        a_different_time.sleep(0.1)
+
+    print("--- Simulation of 100 games complete. Saving final models. ---")
+    agent_orange.save_model("dqn_soccer_orange_final.pth")
+    agent_blue.save_model("dqn_soccer_blue_final.pth")
+    sys.exit()
+
+# This is now the main entry point of the script
+if __name__ == '__main__':
+    run_simulation(NUM_GAMES)
