@@ -69,7 +69,7 @@ class Goal(Entity):
     def __init__(self, clr, **kwargs):
         super().__init__(**kwargs)
         w, h = 20, 10  # width, height
-        recess_depth = 0.5
+        recess_depth = 2
         
         # The frame consists of Entities parented to this Goal Entity
         # This makes rotating the entire goal easy
@@ -191,8 +191,9 @@ class Ball(Entity):
 
         # Bounce off side walls
         if abs(self.x) > FIELD_WIDTH/2:
-            self.velocity.x *= -0.9
-            self.x = math.copysign(FIELD_WIDTH/2, self.x)
+            if abs(self.z) > goal_width/2:
+                self.velocity.x *= -0.9
+                self.x = math.copysign(FIELD_WIDTH/2, self.x)
         # Bounce off end walls (if it doesn't go in the goal)
         if abs(self.z) > FIELD_LENGTH/2:
             self.velocity.z *= -0.9
