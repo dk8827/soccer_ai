@@ -3,6 +3,14 @@ from config import GAME_CONFIG, DQN_CONFIG, ACTIONS, PHYSICS_CONFIG
 from ai import DQNAgent, device
 from game import Player, Ball
 import torch
+import math
+
+
+def rotate_vector(vec, angle_rad):
+    """Rotates a 2D vector (represented as a Vec3 on the XZ plane) by a given angle."""
+    x = vec.x * math.cos(angle_rad) - vec.z * math.sin(angle_rad)
+    z = vec.x * math.sin(angle_rad) + vec.z * math.cos(angle_rad)
+    return Vec3(x, vec.y, z)
 
 
 class EntityManager:
@@ -57,35 +65,50 @@ class AgentManager:
         self.last_dists_to_ball = {agent.team_name: None for agent in self.agents}
 
     def _get_state_for_agent(self, player, opponent, ball, own_goal, opp_goal):
-        """Constructs the state vector for a given agent's perspective."""
+        """
+        Constructs a player-centric state vector for a given agent.
+        All vectors are rotated relative to the player's orientation.
+        """
+        # Normalization factors
         norm_w = GAME_CONFIG['FIELD_WIDTH'] / 2
         norm_l = GAME_CONFIG['FIELD_LENGTH'] / 2
-        p_pos = player.position
-
-        vec_to_ball = (ball.position - p_pos) / Vec3(norm_w, 1, norm_l)
-        vec_to_opp_goal = (opp_goal.position - p_pos) / Vec3(norm_w, 1, norm_l)
-        vec_to_own_goal = (own_goal.position - p_pos) / Vec3(norm_w, 1, norm_l)
-        vec_to_opponent = (opponent.position - p_pos) / Vec3(norm_w, 1, norm_l)
-
-        ball_vel = ball.velocity / PHYSICS_CONFIG['KICK_STRENGTH']
-        p_fwd = player.forward
-
         max_speed = PHYSICS_CONFIG.get('PLAYER_MAX_SPEED', 15)
-        p_vel = player.velocity / max_speed if max_speed > 0 else Vec3(0, 0, 0)
+        
+        p_pos = player.position
+        # Angle for rotating world vectors into player's local coordinate system.
+        # Negative angle because we are rotating the world, not the player.
+        player_angle_rad = -math.radians(player.rotation_y)
 
-        angle_to_ball = p_fwd.dot(vec_to_ball.normalized())
-        angle_to_opp_goal = p_fwd.dot(vec_to_opp_goal.normalized())
+        # 1. Calculate world-frame vectors from player to objects and normalize
+        vec_to_ball_world = (ball.position - p_pos) / Vec3(norm_w, 1, norm_l)
+        vec_to_opp_goal_world = (opp_goal.position - p_pos) / Vec3(norm_w, 1, norm_l)
+        vec_to_own_goal_world = (own_goal.position - p_pos) / Vec3(norm_w, 1, norm_l)
+        vec_to_opponent_world = (opponent.position - p_pos) / Vec3(norm_w, 1, norm_l)
 
+        # 2. Rotate these vectors into player's local reference frame
+        vec_to_ball = rotate_vector(vec_to_ball_world, player_angle_rad)
+        vec_to_opp_goal = rotate_vector(vec_to_opp_goal_world, player_angle_rad)
+        vec_to_own_goal = rotate_vector(vec_to_own_goal_world, player_angle_rad)
+        vec_to_opponent = rotate_vector(vec_to_opponent_world, player_angle_rad)
+
+        # 3. Handle velocities (which are direction vectors)
+        ball_vel_world = ball.velocity / PHYSICS_CONFIG['KICK_STRENGTH']
+        p_vel_world = player.velocity / max_speed if max_speed > 0 else Vec3(0, 0, 0)
+        
+        ball_vel = rotate_vector(ball_vel_world, player_angle_rad)
+        p_vel = rotate_vector(p_vel_world, player_angle_rad)
+
+        # In the player's reference frame, their own forward vector is always (0, 0, 1),
+        # and angles to objects are implicitly captured by the rotated vectors.
+        # Thus, p_fwd, angle_to_ball, and angle_to_opp_goal are no longer needed.
+        
         state = [
             vec_to_ball.x, vec_to_ball.z,
             ball_vel.x, ball_vel.z,
             vec_to_opp_goal.x, vec_to_opp_goal.z,
             vec_to_own_goal.x, vec_to_own_goal.z,
             vec_to_opponent.x, vec_to_opponent.z,
-            p_fwd.x, p_fwd.z,
             p_vel.x, p_vel.z,
-            angle_to_ball,
-            angle_to_opp_goal
         ]
         return state
 

@@ -84,7 +84,9 @@ class DQNAgent:
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
         next_state_values = torch.zeros(self.config['BATCH_SIZE'], device=device)
         with torch.no_grad():
-            next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0]
+            next_state_actions = self.policy_net(non_final_next_states).max(1)[1].unsqueeze(1)
+            next_state_values[non_final_mask] = self.target_net(non_final_next_states).gather(1, next_state_actions).squeeze(1)
+
         expected_state_action_values = (next_state_values * self.config['GAMMA']) + reward_batch
 
         criterion = nn.SmoothL1Loss()
@@ -111,8 +113,12 @@ class DQNAgent:
     def load_model(self, directory, filename):
         path = os.path.join(directory, filename)
         if os.path.exists(path):
-            print(f"Loading model for {self.team_name} from {path}")
-            self.policy_net.load_state_dict(torch.load(path, map_location=device))
-            self.target_net.load_state_dict(self.policy_net.state_dict())
+            try:
+                print(f"Loading model for {self.team_name} from {path}")
+                self.policy_net.load_state_dict(torch.load(path, map_location=device))
+                self.target_net.load_state_dict(self.policy_net.state_dict())
+            except RuntimeError as e:
+                print(f"Could not load model for {self.team_name} due to architecture mismatch. Starting fresh.")
+                print(f"Error: {e}")
         else:
             print(f"No model found for {self.team_name} at {path}, starting fresh.") 
