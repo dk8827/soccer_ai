@@ -5,10 +5,11 @@ import torch
 
 from config import GAME_CONFIG, DQN_CONFIG, ACTIONS
 from ai import DQNAgent, device
+from ui import UIManager
 from game import (
     setup_field, Player, Ball,
     move_player, handle_player_collisions,
-    apply_kick_force, calculate_rewards
+    apply_kick_force, calculate_rewards, RewardContext
 )
 from ursina import Vec3
 from config import PHYSICS_CONFIG
@@ -48,11 +49,10 @@ class SoccerSimulation:
         self.opponents = [None, None]
 
         # UI Elements
-        self.score_display = Text(origin=(0,0), y=0.4, scale=1.5, background=True)
-        self.timer_display = Text("00:00", origin=(0,0), y=0.35, scale=1.2, background=True)
+        self.ui_manager = UIManager()
         
         # Environment & Entities
-        self.player1_goal, self.player2_goal = setup_field()
+        self.player1_goal, self.player2_goal, self.ground = setup_field()
         self.agents = []
         self.ball = None
 
@@ -77,11 +77,11 @@ class SoccerSimulation:
         if self.ball:
             destroy(self.ball)
 
-        self.ball = Ball(position=(0,0,0))
+        self.ball = Ball(position=(0,0,0), ground=self.ground)
         
         self.players = [
-            Player(position=(-15, 0, 0), color=color.orange, rotation_y=90),
-            Player(position=(15, 0, 0), color=color.blue, rotation_y=-90)
+            Player(position=(-15, 0, 0), color=color.orange, rotation_y=90, ground=self.ground),
+            Player(position=(15, 0, 0), color=color.blue, rotation_y=-90, ground=self.ground)
         ]
         self.opponents = [self.players[1], self.players[0]]
     
@@ -154,7 +154,6 @@ class SoccerSimulation:
             angle_to_ball,
             angle_to_opp_goal
         ]
-        assert len(state) == DQN_CONFIG['STATE_SIZE'], "State vector length does not match config"
         return state
 
 
@@ -168,23 +167,14 @@ class SoccerSimulation:
         self.game_over = False
         self.setup_episode()
         self.episode_frame_count = 0
-        self.update_score_ui()
+        self.ui_manager.update_score(self.score)
+        self.ui_manager.update_timer(self.time_left)
         if GAME_CONFIG['SHOULD_RENDER']:
-            self.update_timer_ui()
             # Workaround for a rendering issue on macOS where the window may not
             # update until user interaction. This forces a redraw.
             if sys.platform == 'darwin':
                 window.size += (0, 1)
                 window.size -= (0, 1)
-
-
-    # --- UI Methods ---
-    def update_score_ui(self):
-        self.score_display.text = f"<orange>{self.score['player1']}<default> - <azure>{self.score['player2']}"
-
-    def update_timer_ui(self):
-        mins, secs = divmod(self.time_left, 60)
-        self.timer_display.text = f"Time: {int(mins):02}:{int(secs):02}"
 
 
     # --- Core Game Loop ---
@@ -208,17 +198,24 @@ class SoccerSimulation:
         if hit_info.hit:
             apply_kick_force(hit_info, self.ball, self.agents)
 
-        rewards, done, scoring_team = calculate_rewards(
-            self.agents, self.ball, self.player1_goal, self.player2_goal, 
-            hit_info, prev_ball_dists, self.last_dists_to_ball
+        ctx = RewardContext(
+            agents=self.agents,
+            ball=self.ball,
+            player1_goal=self.player1_goal,
+            player2_goal=self.player2_goal,
+            hit_info=hit_info,
+            prev_ball_dists=prev_ball_dists,
+            last_dists_to_ball=self.last_dists_to_ball
         )
+        rewards, done, scoring_team, new_dists_to_ball = calculate_rewards(ctx)
+        self.last_dists_to_ball = new_dists_to_ball
 
         self._update_learning(states, actions, rewards, done)
 
         if done:
             if scoring_team:
                 self.score[scoring_team] += 1
-            if GAME_CONFIG['SHOULD_RENDER']: self.update_score_ui()
+            self.ui_manager.update_score(self.score)
             self.setup_episode()
             self.episode_frame_count = 0
 
@@ -229,8 +226,7 @@ class SoccerSimulation:
         if self.time_left <= 0:
             self.time_left = 0
             self.game_over = True
-        if GAME_CONFIG['SHOULD_RENDER']:
-            self.update_timer_ui()
+        self.ui_manager.update_timer(self.time_left)
 
     def _handle_player_movement_and_collisions(self):
         """Gets actions from agents, applies them, and handles player-player collisions."""

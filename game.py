@@ -2,14 +2,17 @@ from ursina import *
 import math
 import random
 from panda3d.core import Quat
+from collections import namedtuple
 
 from config import GAME_CONFIG, PHYSICS_CONFIG, DQN_CONFIG, ACTIONS
 
-ground = None # Will be initialized in setup_field
+RewardContext = namedtuple('RewardContext', [
+    'agents', 'ball', 'player1_goal', 'player2_goal', 
+    'hit_info', 'prev_ball_dists', 'last_dists_to_ball'
+])
 
 def setup_field():
     """Creates the ground, walls, and goals for the soccer field."""
-    global ground
     ground = Entity(model='quad', texture='assets/grid_texture.png', scale=(GAME_CONFIG['FIELD_WIDTH'], GAME_CONFIG['FIELD_LENGTH']), rotation_x=90, collider='box', y=-0.5)
 
     wall_texture = 'assets/wall_texture.png'
@@ -35,7 +38,7 @@ def setup_field():
     player1_goal_entity = Goal(clr='player1', position=(-GAME_CONFIG['FIELD_WIDTH']/2 - 0.5, 0, 0), rotation_y=-90)
     player2_goal_entity = Goal(clr='player2', position=(GAME_CONFIG['FIELD_WIDTH']/2 + 0.5, 0, 0), rotation_y=90)
 
-    return player1_goal_entity, player2_goal_entity
+    return player1_goal_entity, player2_goal_entity, ground
 
 class Goal(Entity):
     def __init__(self, clr, **kwargs):
@@ -48,7 +51,7 @@ class Goal(Entity):
         self.trigger = Entity(parent=self, model='cube', collider='box', scale=(w-0.5, h-0.5, 1), position=(0, h/2, recess_depth + 0.5), visible=False)
 
 class Player(Entity):
-    def __init__(self, **kwargs):
+    def __init__(self, ground, **kwargs):
         super().__init__(model='cube', scale=1.8, collider='box', **kwargs)
         eye_dist = 0.25; eye_y = 0.2; eye_z_offset = 0.51
         Entity(parent=self, model='sphere', color=color.white, scale=0.3, position=(-eye_dist, eye_y, eye_z_offset))
@@ -56,6 +59,7 @@ class Player(Entity):
         Entity(parent=self, model='sphere', color=color.white, scale=0.3, position=(eye_dist, eye_y, eye_z_offset))
         Entity(parent=self, model='sphere', color=color.black, scale=0.15, position=(eye_dist, eye_y, eye_z_offset + 0.01))
         self.velocity = Vec3(0,0,0)
+        self.ground = ground
 
     def update(self):
         """Applies velocity, friction, and ensures player stays on the ground and within bounds."""
@@ -66,16 +70,17 @@ class Player(Entity):
         # Apply friction
         self.velocity = lerp(self.velocity, Vec3(0,0,0), dt * PHYSICS_CONFIG.get('PLAYER_FRICTION', 1.5))
 
-        if ground:
-            self.y = ground.y + self.scale_y / 2
+        if self.ground:
+            self.y = self.ground.y + self.scale_y / 2
         
         clamp_player_position(self)
 
 class Ball(Entity):
-    def __init__(self, position):
+    def __init__(self, position, ground):
         super().__init__(model='sphere', texture='assets/soccer_ball_texture.png', position=position, scale=1.2, collider='sphere')
         self.velocity = Vec3(0,0,0)
         self.gravity = -9.8
+        self.ground = ground
 
     def update(self):
         dt = time.dt
@@ -92,7 +97,7 @@ class Ball(Entity):
         self.velocity.y += self.gravity * dt
         self.position += self.velocity * dt
 
-        ground_level = ground.y + self.scale.y/2
+        ground_level = self.ground.y + self.scale.y/2
         if self.y < ground_level:
             self.y = ground_level
             self.velocity.y *= -PHYSICS_CONFIG['BALL_BOUNCINESS']
@@ -206,37 +211,38 @@ def _calculate_proximity_reward(player_position, ball_position, last_dist_to_bal
         reward += (last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
     return reward, current_dist_to_ball
 
-def calculate_rewards(agents, ball, player1_goal, player2_goal, hit_info, prev_ball_dist_to_opp_goals, last_dists_to_ball):
+def calculate_rewards(ctx: RewardContext):
     """
     Calculates all rewards for the current game state and checks for terminal conditions.
     This is the single source of truth for rewards.
     """
-    rewards = {agent.team_name: 0 for agent in agents}
+    rewards = {agent.team_name: 0 for agent in ctx.agents}
+    new_dists_to_ball = {}
     
     # 1. Base rewards and penalties
-    for agent in agents:
+    for agent in ctx.agents:
         rewards[agent.team_name] += DQN_CONFIG['PENALTY_TIME']
         
-        # Calculate proximity reward and update the distance tracking dict
+        # Calculate proximity reward and create a new distance tracking dict
         prox_reward, new_dist = _calculate_proximity_reward(
             agent.player.position, 
-            ball.position, 
-            last_dists_to_ball[agent.team_name]
+            ctx.ball.position, 
+            ctx.last_dists_to_ball[agent.team_name]
         )
         rewards[agent.team_name] += prox_reward
-        last_dists_to_ball[agent.team_name] = new_dist # Mutate the dictionary
+        new_dists_to_ball[agent.team_name] = new_dist
 
     # 2. Kick rewards
-    if hit_info and hit_info.hit:
-        kick_rewards = _calculate_kick_rewards(hit_info, ball, agents, prev_ball_dist_to_opp_goals)
+    if ctx.hit_info and ctx.hit_info.hit:
+        kick_rewards = _calculate_kick_rewards(ctx.hit_info, ctx.ball, ctx.agents, ctx.prev_ball_dists)
         for team_name, reward in kick_rewards.items():
             rewards[team_name] += reward
             
     # 3. Goal check and terminal rewards
     done = False
     scoring_team = None
-    goal_scored_by_player1 = ball.intersects(player2_goal.trigger).hit
-    goal_scored_by_player2 = ball.intersects(player1_goal.trigger).hit
+    goal_scored_by_player1 = ctx.ball.intersects(ctx.player2_goal.trigger).hit
+    goal_scored_by_player2 = ctx.ball.intersects(ctx.player1_goal.trigger).hit
 
     if goal_scored_by_player1:
         rewards['player1'] += DQN_CONFIG['REWARD_GOAL']
@@ -249,4 +255,4 @@ def calculate_rewards(agents, ball, player1_goal, player2_goal, hit_info, prev_b
         done = True
         scoring_team = 'player2'
         
-    return rewards, done, scoring_team 
+    return rewards, done, scoring_team, new_dists_to_ball 

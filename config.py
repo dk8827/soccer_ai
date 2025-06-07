@@ -35,7 +35,6 @@ ACTIONS = {
 # --- AI Hyperparameters ---
 DQN_CONFIG = {
     # Network and State
-    'STATE_SIZE': 16,
     # 'ACTION_SIZE': 3, # This is now len(ACTIONS)
     # Training
     'BATCH_SIZE': 128,
