@@ -175,25 +175,26 @@ def move_player(player, action):
         if player.velocity.length() > max_speed:
             player.velocity = player.velocity.normalized() * max_speed
 
-def handle_ball_kicks(hit_info, ball, player1_goal, player2_goal, player1_entity, player2_entity, prev_ball_dist_to_player1_goal, prev_ball_dist_to_player2_goal):
-    kick_reward_player1, kick_reward_player2 = 0, 0
-    if hit_info.entity == player1_entity:
-        ball.velocity = player1_entity.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
-        kick_reward_player1 += DQN_CONFIG['REWARD_KICK']
-        if distance_xz(ball.position, player2_goal.position) < prev_ball_dist_to_player2_goal:
-            kick_reward_player1 += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
-    elif hit_info.entity == player2_entity:
-        ball.velocity = player2_entity.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
-        kick_reward_player2 += DQN_CONFIG['REWARD_KICK']
-        if distance_xz(ball.position, player1_goal.position) < prev_ball_dist_to_player1_goal:
-             kick_reward_player2 += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
-    return kick_reward_player1, kick_reward_player2
+def handle_ball_kicks(hit_info, ball, agents, prev_ball_dist_to_opp_goals):
+    kick_rewards = {agent.team_name: 0 for agent in agents}
+    kicker = hit_info.entity
+    kicker_agent = next((agent for agent in agents if agent.player == kicker), None)
 
-def calculate_base_reward(agent, ball, last_dist_to_ball):
+    if kicker_agent:
+        ball.velocity = kicker.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
+        kick_rewards[kicker_agent.team_name] += DQN_CONFIG['REWARD_KICK']
+        # Reward for kicking towards opponent's goal
+        if distance_xz(ball.position, kicker_agent.opp_goal.position) < prev_ball_dist_to_opp_goals[kicker_agent.team_name]:
+            kick_rewards[kicker_agent.team_name] += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
+
+    return kick_rewards
+
+def calculate_base_reward(agent, ball):
     reward = DQN_CONFIG['PENALTY_TIME']
     
     current_dist_to_ball = distance_xz(agent.player.position, ball.position)
-    if last_dist_to_ball is not None:
-        reward += (last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
+    if agent.last_dist_to_ball is not None:
+        reward += (agent.last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
     
-    return reward, current_dist_to_ball 
+    agent.last_dist_to_ball = current_dist_to_ball
+    return reward 

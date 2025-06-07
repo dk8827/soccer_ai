@@ -37,71 +37,59 @@ TOTAL_FRAMES = 0
 player1_goal, player2_goal = setup_field()
 
 # These will be created/reset for each episode
-player1_entity = None
-player2_entity = None
+agents = []
 ball = None
-agent_player1 = None
-agent_player2 = None
-last_dist_to_ball_p1 = None
-last_dist_to_ball_p2 = None
 
 
 # ----------------- AGENTS -----------------
 def setup_episode():
-    global player1_entity, player2_entity, ball, agent_player1, agent_player2, last_dist_to_ball_p1, last_dist_to_ball_p2
+    global agents, ball
 
-    # Clear previous entities if they exist, to prevent duplicates in the scene
-    if player1_entity:
-        destroy(player1_entity)
-    if player2_entity:
-        destroy(player2_entity)
+    # Store learning progress from old agents before reset
+    learning_progress = {}
+    for agent in agents:
+        learning_progress[agent.team_name] = {
+            'policy_net_state': agent.policy_net.state_dict(),
+            'target_net_state': agent.target_net.state_dict(),
+            'memory': agent.memory,
+            'steps_done': agent.steps_done
+        }
+        if agent.player:
+            destroy(agent.player)
+
     if ball:
         destroy(ball)
 
-    player1_entity = Player(position=(-15, 0, 0), color=color.orange, rotation_y=90)
-    player2_entity = Player(position=(15, 0, 0), color=color.blue, rotation_y=-90)
     ball = Ball(position=(0,0,0))
     
-    # We need to preserve the learned models, so we create new agents but load the existing models.
-    # We also need to preserve the replay buffer and steps_done.
+    player_entities = [
+        Player(position=(-15, 0, 0), color=color.orange, rotation_y=90),
+        Player(position=(15, 0, 0), color=color.blue, rotation_y=-90)
+    ]
+
+    goal_assignments = [(player1_goal, player2_goal), (player2_goal, player1_goal)]
+    team_names = ['player1', 'player2']
     
-    # Store old agent's learning progress
-    p1_policy_net = agent_player1.policy_net if agent_player1 else None
-    p1_target_net = agent_player1.target_net if agent_player1 else None
-    p1_memory = agent_player1.memory if agent_player1 else None
-    p1_steps = agent_player1.steps_done if agent_player1 else 0
+    agents = []
+    for i in range(2):
+        player = player_entities[i]
+        opponent = player_entities[1-i]
+        own_goal, opp_goal = goal_assignments[i]
+        team_name = team_names[i]
 
-    p2_policy_net = agent_player2.policy_net if agent_player2 else None
-    p2_target_net = agent_player2.target_net if agent_player2 else None
-    p2_memory = agent_player2.memory if agent_player2 else None
-    p2_steps = agent_player2.steps_done if agent_player2 else 0
+        agent = DQNAgent(player, opponent, ball, own_goal, opp_goal, team_name, DQN_CONFIG)
+        
+        # Restore learning progress
+        if team_name in learning_progress:
+            progress = learning_progress[team_name]
+            agent.policy_net.load_state_dict(progress['policy_net_state'])
+            agent.target_net.load_state_dict(progress['target_net_state'])
+            agent.memory = progress['memory']
+            agent.steps_done = progress['steps_done']
+        else: # Load from file on first ever run
+            agent.load_model(GAME_CONFIG['SAVE_DIR'], f"dqn_soccer_{team_name}.pth")
 
-    agent_player1 = DQNAgent(player1_entity, player2_entity, ball, player1_goal, player2_goal, 'player1', DQN_CONFIG)
-    agent_player2 = DQNAgent(player2_entity, player1_entity, ball, player2_goal, player1_goal, 'player2', DQN_CONFIG)
-
-    # Restore learning progress to new agents
-    if p1_policy_net:
-        agent_player1.policy_net.load_state_dict(p1_policy_net.state_dict())
-    else: # Load from file on first run
-        agent_player1.load_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player1.pth")
-    if p1_target_net:
-        agent_player1.target_net.load_state_dict(p1_target_net.state_dict())
-    if p1_memory:
-        agent_player1.memory = p1_memory
-    agent_player1.steps_done = p1_steps
-    
-    if p2_policy_net:
-        agent_player2.policy_net.load_state_dict(p2_policy_net.state_dict())
-    else: # Load from file on first run
-        agent_player2.load_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player2.pth")
-    if p2_target_net:
-        agent_player2.target_net.load_state_dict(p2_target_net.state_dict())
-    if p2_memory:
-        agent_player2.memory = p2_memory
-    agent_player2.steps_done = p2_steps
-
-    last_dist_to_ball_p1 = None
-    last_dist_to_ball_p2 = None
+        agents.append(agent)
 
 
 # ----------------- UI -----------------
@@ -136,7 +124,7 @@ def start_new_game():
 
 # ----------------- MAIN UPDATE LOOP -----------------
 def update():
-    global time_left, game_over, score, episode_frame_count, TOTAL_FRAMES, last_dist_to_ball_p1, last_dist_to_ball_p2
+    global time_left, game_over, score, episode_frame_count, TOTAL_FRAMES
     if game_over: return
     dt = time.dt
     if dt == 0: return
@@ -150,64 +138,62 @@ def update():
         update_timer_ui()
 
     # --- AI STEP ---
-    state_player1 = agent_player1.get_state()
-    state_player2 = agent_player2.get_state()
+    states = [agent.get_state() for agent in agents]
+    actions = [agent.select_action(state) for agent, state in zip(agents, states)]
 
-    action_player1 = agent_player1.select_action(state_player1)
-    action_player2 = agent_player2.select_action(state_player2)
+    for agent, action in zip(agents, actions):
+        move_player(agent.player, action)
 
-    move_player(agent_player1.player, action_player1)
-    move_player(agent_player2.player, action_player2)
-
-    handle_player_collisions(player1_entity, player2_entity)
+    handle_player_collisions(agents[0].player, agents[1].player)
 
     # --- REWARD CALCULATION ---
-    reward_player1, last_dist_to_ball_p1 = calculate_base_reward(agent_player1, ball, last_dist_to_ball_p1)
-    reward_player2, last_dist_to_ball_p2 = calculate_base_reward(agent_player2, ball, last_dist_to_ball_p2)
+    rewards = {agent.team_name: calculate_base_reward(agent, ball) for agent in agents}
 
     # --- PHYSICS & KICK REWARDS ---
-    prev_ball_dist_to_player1_goal = distance_xz(ball.position, player1_goal.position)
-    prev_ball_dist_to_player2_goal = distance_xz(ball.position, player2_goal.position)
+    prev_ball_dist_to_opp_goals = {agent.team_name: distance_xz(ball.position, agent.opp_goal.position) for agent in agents}
     hit_info = ball.intersects()
     if hit_info.hit:
-        kick_reward_player1, kick_reward_player2 = handle_ball_kicks(hit_info, ball, player1_goal, player2_goal, player1_entity, player2_entity, prev_ball_dist_to_player1_goal, prev_ball_dist_to_player2_goal)
-        reward_player1 += kick_reward_player1
-        reward_player2 += kick_reward_player2
-
+        kick_rewards = handle_ball_kicks(hit_info, ball, agents, prev_ball_dist_to_opp_goals)
+        for team_name, reward in kick_rewards.items():
+            rewards[team_name] += reward
+    
     # --- GOAL CHECK & TERMINAL REWARDS ---
     done = False
-    if ball.intersects(player2_goal.trigger).hit:
+    goal_scored_by_player1 = ball.intersects(player2_goal.trigger).hit
+    goal_scored_by_player2 = ball.intersects(player1_goal.trigger).hit
+
+    if goal_scored_by_player1:
         score['player1'] += 1
-        reward_player1 += DQN_CONFIG['REWARD_GOAL']
-        reward_player2 += DQN_CONFIG['PENALTY_CONCEDE']
+        rewards['player1'] += DQN_CONFIG['REWARD_GOAL']
+        rewards['player2'] += DQN_CONFIG['PENALTY_CONCEDE']
         done = True
-    if ball.intersects(player1_goal.trigger).hit:
+    elif goal_scored_by_player2:
         score['player2'] += 1
-        reward_player2 += DQN_CONFIG['REWARD_GOAL']
-        reward_player1 += DQN_CONFIG['PENALTY_CONCEDE']
+        rewards['player2'] += DQN_CONFIG['REWARD_GOAL']
+        rewards['player1'] += DQN_CONFIG['PENALTY_CONCEDE']
         done = True
 
     # --- LEARNING STEP ---
-    next_state_player1 = agent_player1.get_state() if not done else None
-    next_state_player2 = agent_player2.get_state() if not done else None
-    agent_player1.memory.push(state_player1, action_player1, next_state_player1, torch.tensor([reward_player1], device=device))
-    agent_player2.memory.push(state_player2, action_player2, next_state_player2, torch.tensor([reward_player2], device=device))
+    next_states = [agent.get_state() if not done else None for agent in agents]
+    for i, agent in enumerate(agents):
+        reward_tensor = torch.tensor([rewards[agent.team_name]], device=device)
+        agent.memory.push(states[i], actions[i], next_states[i], reward_tensor)
 
     TOTAL_FRAMES += 1
     episode_frame_count += 1
 
     if TOTAL_FRAMES % DQN_CONFIG['UPDATE_EVERY'] == 0:
-        agent_player1.optimize_model()
-        agent_player2.optimize_model()
+        for agent in agents:
+            agent.optimize_model()
 
     if TOTAL_FRAMES % DQN_CONFIG['TARGET_UPDATE_EVERY'] == 0:
-        agent_player1.update_target_net()
-        agent_player2.update_target_net()
+        for agent in agents:
+            agent.update_target_net()
 
     # --- CHECKPOINTING & EPISODE RESET ---
     if TOTAL_FRAMES > 0 and TOTAL_FRAMES % 50000 == 0:
-        agent_player1.save_model(GAME_CONFIG['SAVE_DIR'], f"dqn_soccer_player1_{TOTAL_FRAMES}.pth")
-        agent_player2.save_model(GAME_CONFIG['SAVE_DIR'], f"dqn_soccer_player2_{TOTAL_FRAMES}.pth")
+        for agent in agents:
+            agent.save_model(GAME_CONFIG['SAVE_DIR'], f"dqn_soccer_{agent.team_name}_{TOTAL_FRAMES}.pth")
 
     if done:
         if GAME_CONFIG['SHOULD_RENDER']: update_score_ui()
@@ -218,8 +204,8 @@ def update():
 def input(key):
     if key == 'escape':
         print("--- Simulation ended by user. Saving models... ---")
-        agent_player1.save_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player1_final.pth")
-        agent_player2.save_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player2_final.pth")
+        for agent in agents:
+            agent.save_model(GAME_CONFIG['SAVE_DIR'], f"dqn_soccer_{agent.team_name}_final.pth")
         sys.exit()
 
 def run_simulation(num_games_to_play):
@@ -236,8 +222,8 @@ def run_simulation(num_games_to_play):
              a_different_time.sleep(0.01)
 
     print(f"--- Simulation of {num_games_to_play} games complete. Saving final models. ---")
-    agent_player1.save_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player1_final.pth")
-    agent_player2.save_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player2_final.pth")
+    for agent in agents:
+        agent.save_model(GAME_CONFIG['SAVE_DIR'], f"dqn_soccer_{agent.team_name}_final.pth")
     sys.exit()
 
 if __name__ == '__main__':

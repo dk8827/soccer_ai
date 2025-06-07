@@ -50,6 +50,7 @@ class DQNAgent:
         self.opp_goal = opp_goal
         self.team_name = team_name
         self.config = config
+        self.last_dist_to_ball = None
 
         self.state_size = self.config['STATE_SIZE']
         self.action_size = self.config['ACTION_SIZE']
