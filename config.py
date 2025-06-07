@@ -1,0 +1,44 @@
+# --- Game & Simulation Config ---
+GAME_CONFIG = {
+    'SHOULD_RENDER': True,
+    'FIELD_WIDTH': 40,
+    'FIELD_LENGTH': 25,
+    'GAME_TIMER_SECONDS': 60,
+    'NUM_GAMES_TO_RUN': 100,
+    'SAVE_DIR': "models",
+}
+
+# --- Physics & Gameplay Config ---
+PHYSICS_CONFIG = {
+    'PLAYER_MOVE_SPEED': 12,
+    'PLAYER_TURN_SPEED': 200,
+    'KICK_STRENGTH': 15,
+    'KICK_LIFT': 4,
+}
+
+# --- AI Hyperparameters ---
+DQN_CONFIG = {
+    # Network and State
+    'STATE_SIZE': 14,  # Updated: 12 original + 2 new angle features
+    'ACTION_SIZE': 3,  # Turn Left, Turn Right, Move Forward
+    # Training
+    'BATCH_SIZE': 128,
+    'GAMMA': 0.99,       # Discount factor
+    'LR': 1e-4,          # Learning Rate
+    'TAU': 0.005,        # Target network soft update rate
+    'MEMORY_CAPACITY': 50000,
+    'UPDATE_EVERY': 4,              # How often to run the optimization step
+    'TARGET_UPDATE_EVERY': 100,     # How often to soft-update the target network
+    # Epsilon-Greedy Exploration
+    'EPS_START': 0.9,
+    'EPS_END': 0.05,
+    'EPS_DECAY': 30000, # Slower decay for more exploration
+    # Rewards
+    'REWARD_GOAL': 100,
+    'REWARD_KICK': 5,
+    'REWARD_KICK_TOWARDS_GOAL': 10,
+    'REWARD_MOVE_TO_BALL_SCALE': 0.5,
+    'REWARD_DEFENSIVE_POS': 0.1,
+    'PENALTY_TIME': -0.01,
+    'PENALTY_CONCEDE': -100,
+} 
