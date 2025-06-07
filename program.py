@@ -218,8 +218,7 @@ class DQNAgent:
         elif action_id == 2: # Move Forward
             self.player.position += self.player.forward * dt * PHYSICS_CONFIG['PLAYER_MOVE_SPEED']
 
-        self.player.x = clamp(self.player.x, -GAME_CONFIG['FIELD_WIDTH']/2, GAME_CONFIG['FIELD_WIDTH']/2)
-        self.player.z = clamp(self.player.z, -GAME_CONFIG['FIELD_LENGTH']/2, GAME_CONFIG['FIELD_LENGTH']/2)
+        clamp_player_position(self.player)
 
     def save_model(self, directory, filename):
         if not os.path.exists(directory):
@@ -336,6 +335,60 @@ def update_score_ui():
 camera.position = (0, 55, -55); camera.rotation = (45, 0, 0)
 episode_frame_count = 0; TOTAL_FRAMES = 0
 
+def clamp_player_position(player):
+    """ Ensures a player stays within the field boundaries, accounting for rotation. """
+    rotation_rad = math.radians(player.rotation_y)
+    cos_theta = abs(math.cos(rotation_rad))
+    sin_theta = abs(math.sin(rotation_rad))
+    half_x = player.scale_x / 2
+    half_z = player.scale_z / 2
+    aabb_half_width = half_x * cos_theta + half_z * sin_theta
+    aabb_half_depth = half_x * sin_theta + half_z * cos_theta
+
+    player.x = clamp(player.x, -GAME_CONFIG['FIELD_WIDTH']/2 + aabb_half_width, GAME_CONFIG['FIELD_WIDTH']/2 - aabb_half_width)
+    player.z = clamp(player.z, -GAME_CONFIG['FIELD_LENGTH']/2 + aabb_half_depth, GAME_CONFIG['FIELD_LENGTH']/2 - aabb_half_depth)
+
+def handle_player_collisions():
+    """ Detects and resolves collisions between the two players. """
+    if player_orange_entity.intersects(player_blue_entity).hit:
+        p_pos_o = player_orange_entity.position
+        p_pos_b = player_blue_entity.position
+
+        # Resolve by pushing them apart based on penetration depth
+        direction = p_pos_o - p_pos_b
+        direction.y = 0
+        dist = direction.length()
+
+        if dist == 0:
+            direction = Vec3(random.uniform(-1, 1), 0, random.uniform(-1, 1)).normalized()
+        else:
+            direction.normalize()
+
+        # Separating Axis Theorem (SAT) based resolution on the axis between centers
+        def get_projected_radius(player, axis):
+            rot_rad = math.radians(player.rotation_y)
+            # Get player's local axes in world space
+            x_axis = Vec3(math.cos(rot_rad), 0, -math.sin(rot_rad))
+            z_axis = Vec3(math.sin(rot_rad), 0, math.cos(rot_rad))
+            # Project the half-extents of the player onto the axis
+            radius_x = abs(axis.dot(x_axis)) * (player.scale_x / 2)
+            radius_z = abs(axis.dot(z_axis)) * (player.scale_z / 2)
+            return radius_x + radius_z
+
+        radius_o = get_projected_radius(player_orange_entity, direction)
+        radius_b = get_projected_radius(player_blue_entity, direction)
+
+        overlap = (radius_o + radius_b) - dist
+
+        if overlap > 0:
+            # Move each player by half the overlap
+            player_orange_entity.position += direction * (overlap / 2)
+            player_blue_entity.position -= direction * (overlap / 2)
+
+            # Ensure they are still in bounds after being pushed
+            clamp_player_position(player_orange_entity)
+            clamp_player_position(player_blue_entity)
+
 def handle_agent_step(agent, state):
     action = agent.select_action(state)
     agent.move_player(action)
@@ -415,6 +468,9 @@ def update():
     # 2. Agents select and perform actions
     action_orange = handle_agent_step(agent_orange, state_orange)
     action_blue = handle_agent_step(agent_blue, state_blue)
+
+    # NEW: Handle player-player collisions after they move
+    handle_player_collisions()
 
     # 3. Calculate base rewards (time penalty, moving to ball, defensive pos)
     reward_orange = calculate_base_reward(agent_orange)
