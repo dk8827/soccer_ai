@@ -1,6 +1,14 @@
 from ursina import *
 import sys
 import math
+from panda3d.core import Quat
+
+def cross(v1, v2):
+    return Vec3(
+        v1.y * v2.z - v1.z * v2.y,
+        v1.z * v2.x - v1.x * v2.z,
+        v1.x * v2.y - v1.y * v2.x
+    )
 
 # ----------------- GAME SETUP -----------------
 app = Ursina()
@@ -35,12 +43,12 @@ ground = Entity(
 
 # The surrounding walls
 wall_texture = 'assets/wall_texture.png'
-wall_height = 8
-goal_width = 10 # Must match goal's width
+wall_height = 12
+goal_width = 20 # Must match goal's width
 
 # Top and bottom walls
 Entity(model='cube', texture=wall_texture, scale=(FIELD_WIDTH + 2, wall_height, 1), position=(0, wall_height/2 - 0.5, FIELD_LENGTH/2 + 0.5), collider='box')
-Entity(model='cube', texture=wall_texture, scale=(FIELD_WIDTH + 2, wall_height, 1), position=(0, wall_height/2 - 0.5, -FIELD_LENGTH/2 - 0.5), collider='box')
+Entity(model='cube', scale=(FIELD_WIDTH + 2, wall_height, 1), position=(0, wall_height/2 - 0.5, -FIELD_LENGTH/2 - 0.5), collider='box', visible=False)
 
 # Side walls (with goal openings)
 wall_segment_length = (FIELD_LENGTH - goal_width) / 2
@@ -52,36 +60,38 @@ Entity(model='cube', texture=wall_texture, scale=(1, wall_height, wall_segment_l
 Entity(model='cube', texture=wall_texture, scale=(1, wall_height, wall_segment_length), position=(FIELD_WIDTH/2 + 0.5, wall_height/2 - 0.5, -wall_z_offset), collider='box')
 Entity(model='cube', texture=wall_texture, scale=(1, wall_height, wall_segment_length), position=(FIELD_WIDTH/2 + 0.5, wall_height/2 - 0.5, wall_z_offset), collider='box')
 
+# Wall segments above goals
+Entity(model='cube', texture=wall_texture, scale=(1, 1.25, goal_width), position=(-FIELD_WIDTH/2 - 0.5, 10.875, 0), collider='box')
+Entity(model='cube', texture=wall_texture, scale=(1, 1.25, goal_width), position=(FIELD_WIDTH/2 + 0.5, 10.875, 0), collider='box')
+
 # ----------------- GOAL CLASS -----------------
 class Goal(Entity):
     def __init__(self, clr, **kwargs):
         super().__init__(**kwargs)
-        self.model = 'cube'
-        self.scale = 0.2
-        self.color = color.yellow
-        print(f"Goal created: color={clr}, position={self.position}, rotation_y={self.rotation_y}")
-        w, h = 10, 5  # width, height
+        w, h = 20, 10  # width, height
+        recess_depth = 0.5
         
         # The frame consists of Entities parented to this Goal Entity
         # This makes rotating the entire goal easy
         frame_color = color.orange if clr == 'orange' else color.blue
-        Entity(parent=self, model='cube', collider='box', scale=(w, .3, .3), position=(0, h, 0), color=frame_color)
-        Entity(parent=self, model='cube', collider='box', scale=(.3, h, .3), position=(-w/2, h/2, 0), color=frame_color)
-        Entity(parent=self, model='cube', collider='box', scale=(.3, h, .3), position=(w/2, h/2, 0), color=frame_color)
+        Entity(parent=self, model='cube', collider='box', scale=(w, .5, .5), position=(0, h, recess_depth), color=frame_color)
+        Entity(parent=self, model='cube', collider='box', scale=(.5, h, .5), position=(-w/2, h/2, recess_depth), color=frame_color)
+        Entity(parent=self, model='cube', collider='box', scale=(.5, h, .5), position=(w/2, h/2, recess_depth), color=frame_color)
 
         # Net behind the frame
         Entity(parent=self, model='quad', texture='assets/net_texture.png', double_sided=True,
-               scale=(w,h), position=(0, h/2, 0.05))
+               texture_scale=(w/10, h/5),
+               scale=(w,h), position=(0, h/2, recess_depth + 0.05))
 
         # Invisible trigger for detecting goals. It's slightly inside the frame.
         self.trigger = Entity(parent=self, model='cube', collider='box',
                               scale=(w-0.5, h-0.5, 1),
-                              position=(0, h/2, 0.5),
+                              position=(0, h/2, recess_depth + 0.5),
                               visible=False)
 
 # Create the two goals
-orange_goal = Goal(clr='orange', position=(-FIELD_WIDTH/2, 0, 0), rotation_y=-90)
-blue_goal = Goal(clr='blue', position=(FIELD_WIDTH/2, 0, 0), rotation_y=90)
+orange_goal = Goal(clr='orange', position=(-FIELD_WIDTH/2 - 0.5, 0, 0), rotation_y=-90)
+blue_goal = Goal(clr='blue', position=(FIELD_WIDTH/2 + 0.5, 0, 0), rotation_y=90)
 
 # ----------------- PLAYER AND BALL CLASSES -----------------
 class Player(Entity):
@@ -163,6 +173,18 @@ class Ball(Entity):
         self.velocity = Vec3(0,0,0)
 
     def update(self):
+        # Ball rolling physics
+        if self.velocity.length_squared() > 0:
+            # Rotate based on movement
+            distance = self.velocity.length() * time.dt
+            radius = self.scale.x / 2
+            rotation_amount = (distance / radius) * (180 / math.pi)
+            rotation_axis = cross(self.velocity, Vec3(0, 1, 0)).normalized()
+            
+            q = Quat()
+            q.setFromAxisAngle(rotation_amount, rotation_axis)
+            self.quaternion = q * self.quaternion
+
         # Apply velocity and simple friction
         self.position += self.velocity * time.dt
         self.velocity = lerp(self.velocity, Vec3(0,0,0), time.dt * 0.5)
@@ -178,10 +200,10 @@ class Ball(Entity):
 
 # Create the players and the ball
 human_player = Player(position=(-10, 0, 0), clr=color.orange, controls={'fwd':'w', 'left':'a', 'right':'d'})
-human_player.rotation_y = -90
+human_player.rotation_y = 90
 ball = Ball(position=(0,0,0))
 ai_player = AiPlayer(position=(10, 0, 0), clr=color.blue, target_ball=ball)
-ai_player.rotation_y = 90
+ai_player.rotation_y = -90
 
 # ----------------- UI (SCORE & TIMER) -----------------
 # Main score display in the center
@@ -218,9 +240,9 @@ def input(key):
 def reset_positions():
     """Resets players and ball to starting positions after a goal."""
     human_player.position = (-10, 0, 0)
-    human_player.rotation = (0, -90, 0)
+    human_player.rotation = (0, 90, 0)
     ai_player.position = (10, 0, 0)
-    ai_player.rotation = (0, 90, 0)
+    ai_player.rotation = (0, -90, 0)
     ball.position = (0, 0, 0)
     ball.velocity = Vec3(0,0,0)
 
