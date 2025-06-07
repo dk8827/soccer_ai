@@ -5,7 +5,8 @@ GAME_CONFIG = {
     'FIELD_LENGTH': 25,
     'GOAL_WIDTH': 20,
     'WALL_HEIGHT': 12,
-    'GAME_TIMER_SECONDS': 15,
+    'GAME_TIMER_SECONDS': 40,
+    'NO_TOUCH_TIMEOUT': 20,
     'NUM_GAMES_TO_RUN': 2000,
     'SAVE_DIR': "models",
 }

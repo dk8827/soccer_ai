@@ -38,6 +38,7 @@ class GameManager:
         self.game_over = False
         self.simulation_running = False
         self.time_left = GAME_CONFIG['GAME_TIMER_SECONDS']
+        self.no_touch_timer = 0
         self.game_number = 0
         self.episode_frame_count = 0
         self.TOTAL_FRAMES = 0
@@ -65,6 +66,7 @@ class GameManager:
         print(f"--- Starting Game {self.game_number + 1}/{GAME_CONFIG['NUM_GAMES_TO_RUN']} ---")
         self.score = {'player1': 0, 'player2': 0}
         self.time_left = GAME_CONFIG['GAME_TIMER_SECONDS']
+        self.no_touch_timer = 0
         self.game_over = False
         self.episode_frame_count = 0
         self.ui_manager.update_score(self.score)
@@ -98,6 +100,13 @@ class GameManager:
         self._update_timer(dt)
         if self.game_over: return # Check again as timer can end game
 
+        # Inactivity timer check
+        self.no_touch_timer += dt
+        if self.no_touch_timer > GAME_CONFIG['NO_TOUCH_TIMEOUT']:
+            print("--- Game ended due to inactivity. ---")
+            self.game_over = True
+            return
+
         # 1. Get AI actions and move players
         states, actions = self.agent_manager.get_actions_and_states()
         for i, action in enumerate(actions):
@@ -110,6 +119,7 @@ class GameManager:
         hit_info = ball.intersects(self.entity_manager.players[0]) or ball.intersects(self.entity_manager.players[1])
         
         if hit_info.hit:
+            self.no_touch_timer = 0 # Reset inactivity timer
             apply_kick_force(hit_info, ball, self.agent_manager.agents)
 
         # 3. Calculate rewards
@@ -147,6 +157,7 @@ class GameManager:
             self.time_left = 0
             self.game_over = True
         self.ui_manager.update_timer(self.time_left)
+        self.ui_manager.update_no_touch_timer(self.no_touch_timer)
 
 
     def run_headless_simulation(self):
