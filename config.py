@@ -3,6 +3,8 @@ GAME_CONFIG = {
     'SHOULD_RENDER': True,
     'FIELD_WIDTH': 40,
     'FIELD_LENGTH': 25,
+    'GOAL_WIDTH': 20,
+    'WALL_HEIGHT': 12,
     'GAME_TIMER_SECONDS': 15,
     'NUM_GAMES_TO_RUN': 100,
     'SAVE_DIR': "models",
@@ -16,6 +18,11 @@ PHYSICS_CONFIG = {
     'PLAYER_TURN_SPEED': 200,
     'KICK_STRENGTH': 10,
     'KICK_LIFT': 6,
+    'BALL_BOUNCINESS': 0.6,
+    'BALL_WALL_BOUNCINESS': 0.9,
+    'BALL_GROUND_FRICTION': 1.0,
+    'BALL_AIR_FRICTION': 0.1,
+    'BALL_REST_VELOCITY_THRESHOLD': 1.0,
 }
 
 # --- AI Action Definitions ---
@@ -28,7 +35,7 @@ ACTIONS = {
 # --- AI Hyperparameters ---
 DQN_CONFIG = {
     # Network and State
-    # 'STATE_SIZE': 16, # This will be determined dynamically
+    'STATE_SIZE': 16,
     # 'ACTION_SIZE': 3, # This is now len(ACTIONS)
     # Training
     'BATCH_SIZE': 128,
@@ -38,6 +45,8 @@ DQN_CONFIG = {
     'MEMORY_CAPACITY': 50000,
     'UPDATE_EVERY': 4,              # How often to run the optimization step
     'TARGET_UPDATE_EVERY': 100,     # How often to soft-update the target network
+    'CHECKPOINT_EVERY': 50000,
+    'GRAD_CLIP': 100,
     # Epsilon-Greedy Exploration
     'EPS_START': 0.9,
     'EPS_END': 0.05,

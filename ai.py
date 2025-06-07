@@ -42,19 +42,12 @@ class DQN(nn.Module):
         return self.layer3(x)
 
 class DQNAgent:
-    def __init__(self, player_entity, opponent_entity, ball_entity, own_goal, opp_goal, team_name, config):
-        self.player = player_entity
-        self.opponent = opponent_entity
-        self.ball = ball_entity
-        self.own_goal = own_goal
-        self.opp_goal = opp_goal
+    def __init__(self, team_name, config, state_size, action_size):
         self.team_name = team_name
         self.config = config
-        self.last_dist_to_ball = None
-
-        # Dynamically determine state and action sizes
-        self.state_size = self.get_state().shape[1]
-        self.action_size = len(ACTIONS)
+        
+        self.state_size = state_size
+        self.action_size = action_size
         
         self.memory = ReplayBuffer(self.config['MEMORY_CAPACITY'])
         self.steps_done = 0
@@ -63,41 +56,6 @@ class DQNAgent:
         self.target_net = DQN(self.state_size, self.action_size).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.config['LR'], amsgrad=True)
-
-    def get_state(self):
-        norm_w = GAME_CONFIG['FIELD_WIDTH'] / 2
-        norm_l = GAME_CONFIG['FIELD_LENGTH'] / 2
-        p_pos = self.player.position
-
-        # Relative vectors, normalized
-        vec_to_ball = (self.ball.position - p_pos) / Vec3(norm_w, 1, norm_l)
-        vec_to_opp_goal = (self.opp_goal.position - p_pos) / Vec3(norm_w, 1, norm_l)
-        vec_to_own_goal = (self.own_goal.position - p_pos) / Vec3(norm_w, 1, norm_l)
-        vec_to_opponent = (self.opponent.position - p_pos) / Vec3(norm_w, 1, norm_l)
-
-        ball_vel = self.ball.velocity / PHYSICS_CONFIG['KICK_STRENGTH']
-        p_fwd = self.player.forward
-
-        # Player velocity, normalized
-        max_speed = PHYSICS_CONFIG.get('PLAYER_MAX_SPEED', 15)
-        p_vel = self.player.velocity / max_speed if max_speed > 0 else Vec3(0,0,0)
-
-        # NEW: Dot products to represent angles
-        angle_to_ball = p_fwd.dot(vec_to_ball.normalized())
-        angle_to_opp_goal = p_fwd.dot(vec_to_opp_goal.normalized())
-
-        state = [
-            vec_to_ball.x, vec_to_ball.z,
-            ball_vel.x, ball_vel.z,
-            vec_to_opp_goal.x, vec_to_opp_goal.z,
-            vec_to_own_goal.x, vec_to_own_goal.z,
-            vec_to_opponent.x, vec_to_opponent.z,
-            p_fwd.x, p_fwd.z,
-            p_vel.x, p_vel.z,
-            angle_to_ball,
-            angle_to_opp_goal
-        ]
-        return torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
 
     def select_action(self, state):
         sample = random.random()
@@ -133,7 +91,7 @@ class DQNAgent:
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), self.config['GRAD_CLIP'])
         self.optimizer.step()
 
     def update_target_net(self):

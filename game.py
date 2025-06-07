@@ -5,7 +5,6 @@ from panda3d.core import Quat
 
 from config import GAME_CONFIG, PHYSICS_CONFIG, DQN_CONFIG, ACTIONS
 
-goal_width = 20
 ground = None # Will be initialized in setup_field
 
 def setup_field():
@@ -14,7 +13,8 @@ def setup_field():
     ground = Entity(model='quad', texture='assets/grid_texture.png', scale=(GAME_CONFIG['FIELD_WIDTH'], GAME_CONFIG['FIELD_LENGTH']), rotation_x=90, collider='box', y=-0.5)
 
     wall_texture = 'assets/wall_texture.png'
-    wall_height = 12
+    wall_height = GAME_CONFIG['WALL_HEIGHT']
+    goal_width = GAME_CONFIG['GOAL_WIDTH']
     wall_segment_length = (GAME_CONFIG['FIELD_LENGTH'] - goal_width) / 2
     wall_z_offset = goal_width / 2 + wall_segment_length / 2
 
@@ -40,7 +40,7 @@ def setup_field():
 class Goal(Entity):
     def __init__(self, clr, **kwargs):
         super().__init__(**kwargs)
-        w, h = 20, 10; recess_depth = 2; frame_color = color.orange if clr == 'player1' else color.blue
+        w, h = GAME_CONFIG['GOAL_WIDTH'], 10; recess_depth = 2; frame_color = color.orange if clr == 'player1' else color.blue
         Entity(parent=self, model='cube', collider='box', scale=(w, .5, .5), position=(0, h, recess_depth), color=frame_color)
         Entity(parent=self, model='cube', collider='box', scale=(.5, h, .5), position=(-w/2, h/2, recess_depth), color=frame_color)
         Entity(parent=self, model='cube', collider='box', scale=(.5, h, .5), position=(w/2, h/2, recess_depth), color=frame_color)
@@ -95,22 +95,22 @@ class Ball(Entity):
         ground_level = ground.y + self.scale.y/2
         if self.y < ground_level:
             self.y = ground_level
-            self.velocity.y *= -0.6
+            self.velocity.y *= -PHYSICS_CONFIG['BALL_BOUNCINESS']
 
         if abs(self.x) > GAME_CONFIG['FIELD_WIDTH']/2:
-            if abs(self.z) > goal_width/2:
-                self.velocity.x *= -0.9
+            if abs(self.z) > GAME_CONFIG['GOAL_WIDTH']/2:
+                self.velocity.x *= -PHYSICS_CONFIG['BALL_WALL_BOUNCINESS']
                 self.x = math.copysign(GAME_CONFIG['FIELD_WIDTH']/2, self.x)
         if abs(self.z) > GAME_CONFIG['FIELD_LENGTH']/2:
-            self.velocity.z *= -0.9
+            self.velocity.z *= -PHYSICS_CONFIG['BALL_WALL_BOUNCINESS']
             self.z = math.copysign(GAME_CONFIG['FIELD_LENGTH']/2, self.z)
 
         on_ground = self.y <= ground_level + 0.01
         if on_ground:
-            self.velocity.xz = lerp(self.velocity.xz, Vec2(0,0), dt * 1.0)
-            if abs(self.velocity.y) < 1: self.velocity.y = 0
+            self.velocity.xz = lerp(self.velocity.xz, Vec2(0,0), dt * PHYSICS_CONFIG['BALL_GROUND_FRICTION'])
+            if abs(self.velocity.y) < PHYSICS_CONFIG['BALL_REST_VELOCITY_THRESHOLD']: self.velocity.y = 0
         else:
-            self.velocity = lerp(self.velocity, Vec3(0,0,0), dt * 0.1)
+            self.velocity = lerp(self.velocity, Vec3(0,0,0), dt * PHYSICS_CONFIG['BALL_AIR_FRICTION'])
 
 def clamp_player_position(player):
     """ Ensures a player stays within the field boundaries, accounting for rotation. """
@@ -175,26 +175,78 @@ def move_player(player, action):
         if player.velocity.length() > max_speed:
             player.velocity = player.velocity.normalized() * max_speed
 
-def handle_ball_kicks(hit_info, ball, agents, prev_ball_dist_to_opp_goals):
-    kick_rewards = {agent.team_name: 0 for agent in agents}
+def apply_kick_force(hit_info, ball, agents):
+    """Applies force to the ball when a player kicks it."""
     kicker = hit_info.entity
     kicker_agent = next((agent for agent in agents if agent.player == kicker), None)
 
     if kicker_agent:
         ball.velocity = kicker.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
+
+def _calculate_kick_rewards(hit_info, ball, agents, prev_ball_dist_to_opp_goals):
+    """Calculates rewards for kicking the ball."""
+    kick_rewards = {agent.team_name: 0 for agent in agents}
+    kicker = hit_info.entity
+    kicker_agent = next((agent for agent in agents if agent.player == kicker), None)
+
+    if kicker_agent:
         kick_rewards[kicker_agent.team_name] += DQN_CONFIG['REWARD_KICK']
         # Reward for kicking towards opponent's goal
-        if distance_xz(ball.position, kicker_agent.opp_goal.position) < prev_ball_dist_to_opp_goals[kicker_agent.team_name]:
+        current_dist_to_goal = distance_xz(ball.position, kicker_agent.opp_goal.position)
+        if current_dist_to_goal < prev_ball_dist_to_opp_goals.get(kicker_agent.team_name, float('inf')):
             kick_rewards[kicker_agent.team_name] += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
-
+    
     return kick_rewards
 
-def calculate_base_reward(agent, ball):
-    reward = DQN_CONFIG['PENALTY_TIME']
+def _calculate_proximity_reward(player_position, ball_position, last_dist_to_ball):
+    """Calculates reward for moving towards the ball."""
+    reward = 0
+    current_dist_to_ball = distance_xz(player_position, ball_position)
+    if last_dist_to_ball is not None:
+        reward += (last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
+    return reward, current_dist_to_ball
+
+def calculate_rewards(agents, ball, player1_goal, player2_goal, hit_info, prev_ball_dist_to_opp_goals, last_dists_to_ball):
+    """
+    Calculates all rewards for the current game state and checks for terminal conditions.
+    This is the single source of truth for rewards.
+    """
+    rewards = {agent.team_name: 0 for agent in agents}
     
-    current_dist_to_ball = distance_xz(agent.player.position, ball.position)
-    if agent.last_dist_to_ball is not None:
-        reward += (agent.last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
-    
-    agent.last_dist_to_ball = current_dist_to_ball
-    return reward 
+    # 1. Base rewards and penalties
+    for agent in agents:
+        rewards[agent.team_name] += DQN_CONFIG['PENALTY_TIME']
+        
+        # Calculate proximity reward and update the distance tracking dict
+        prox_reward, new_dist = _calculate_proximity_reward(
+            agent.player.position, 
+            ball.position, 
+            last_dists_to_ball[agent.team_name]
+        )
+        rewards[agent.team_name] += prox_reward
+        last_dists_to_ball[agent.team_name] = new_dist # Mutate the dictionary
+
+    # 2. Kick rewards
+    if hit_info and hit_info.hit:
+        kick_rewards = _calculate_kick_rewards(hit_info, ball, agents, prev_ball_dist_to_opp_goals)
+        for team_name, reward in kick_rewards.items():
+            rewards[team_name] += reward
+            
+    # 3. Goal check and terminal rewards
+    done = False
+    scoring_team = None
+    goal_scored_by_player1 = ball.intersects(player2_goal.trigger).hit
+    goal_scored_by_player2 = ball.intersects(player1_goal.trigger).hit
+
+    if goal_scored_by_player1:
+        rewards['player1'] += DQN_CONFIG['REWARD_GOAL']
+        rewards['player2'] += DQN_CONFIG['PENALTY_CONCEDE']
+        done = True
+        scoring_team = 'player1'
+    elif goal_scored_by_player2:
+        rewards['player2'] += DQN_CONFIG['REWARD_GOAL']
+        rewards['player1'] += DQN_CONFIG['PENALTY_CONCEDE']
+        done = True
+        scoring_team = 'player2'
+        
+    return rewards, done, scoring_team 
