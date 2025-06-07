@@ -11,6 +11,10 @@ RewardContext = namedtuple('RewardContext', [
     'hit_info', 'prev_ball_dists', 'last_dists_to_ball'
 ])
 
+def distance_xz(pos1, pos2):
+    """Calculates the 2D distance between two points on the XZ plane."""
+    return (pos1.xz - pos2.xz).length()
+
 def setup_field():
     """Creates the ground, walls, and goals for the soccer field."""
     ground = Entity(model='quad', texture='assets/grid_texture.png', scale=(GAME_CONFIG['FIELD_WIDTH'], GAME_CONFIG['FIELD_LENGTH']), rotation_x=90, collider='box', y=-0.5)
@@ -61,6 +65,11 @@ class Player(Entity):
         self.velocity = Vec3(0,0,0)
         self.ground = ground
 
+    def reset(self, position, rotation_y):
+        self.position = position
+        self.rotation_y = rotation_y
+        self.velocity = Vec3(0,0,0)
+
     def update(self):
         """Applies velocity, friction, and ensures player stays on the ground and within bounds."""
         dt = time.dt
@@ -81,6 +90,10 @@ class Ball(Entity):
         self.velocity = Vec3(0,0,0)
         self.gravity = -9.8
         self.ground = ground
+
+    def reset(self, position):
+        self.position = position
+        self.velocity = Vec3(0,0,0)
 
     def update(self):
         dt = time.dt
