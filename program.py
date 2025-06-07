@@ -171,12 +171,13 @@ class Ball(Entity):
             collider='sphere'
         )
         self.velocity = Vec3(0,0,0)
+        self.gravity = -9.8
 
     def update(self):
         # Ball rolling physics
-        if self.velocity.length_squared() > 0:
+        if self.velocity.xz.length_squared() > 0:
             # Rotate based on movement
-            distance = self.velocity.length() * time.dt
+            distance = self.velocity.xz.length() * time.dt
             radius = self.scale.x / 2
             rotation_amount = (distance / radius) * (180 / math.pi)
             rotation_axis = cross(self.velocity, Vec3(0, 1, 0)).normalized()
@@ -185,9 +186,18 @@ class Ball(Entity):
             q.setFromAxisAngle(rotation_amount, rotation_axis)
             self.quaternion = q * self.quaternion
 
-        # Apply velocity and simple friction
+        # Apply gravity
+        self.velocity.y += self.gravity * time.dt
+        # Move the ball
         self.position += self.velocity * time.dt
-        self.velocity = lerp(self.velocity, Vec3(0,0,0), time.dt * 0.5)
+        
+        # --- Collision Detection and Resolution ---
+        ground_level = ground.y + self.scale.y/2
+        
+        # Ground bounce
+        if self.y < ground_level:
+            self.y = ground_level
+            self.velocity.y *= -0.6
 
         # Bounce off side walls
         if abs(self.x) > FIELD_WIDTH/2:
@@ -198,6 +208,17 @@ class Ball(Entity):
         if abs(self.z) > FIELD_LENGTH/2:
             self.velocity.z *= -0.9
             self.z = math.copysign(FIELD_LENGTH/2, self.z)
+            
+        # --- Friction and Drag ---
+        on_ground = self.y <= ground_level + 0.01
+        if on_ground:
+            self.velocity.xz = lerp(self.velocity.xz, Vec2(0,0), time.dt * 1.0)
+            if abs(self.velocity.y) < 1:
+                self.velocity.y = 0
+        else:
+            # Air drag
+            self.velocity = lerp(self.velocity, Vec3(0,0,0), time.dt * 0.1)
+
 
 # Create the players and the ball
 human_player = Player(position=(-10, 0, 0), clr=color.orange, controls={'fwd':'w', 'left':'a', 'right':'d'})
@@ -226,7 +247,7 @@ def update_score_ui():
 
 # ----------------- CAMERA AND GAME LOGIC -----------------
 # Position the camera to match the image
-camera.position = (0, 40, -40)
+camera.position = (0, 55, -55)
 camera.rotation = (45, 0, 0)
 
 def input(key):
@@ -274,7 +295,7 @@ def update():
     if hit_info.hit and hit_info.entity in (human_player, ai_player):
         player = hit_info.entity
         # Apply force to the ball based on the player's forward direction
-        ball.velocity = player.forward * 15
+        ball.velocity = player.forward * 15 + Vec3(0, 4, 0)
 
     # Ball hits goal trigger
     if ball.intersects(blue_goal.trigger).hit:
