@@ -8,7 +8,7 @@ from ai import DQNAgent, device
 from game import (
     setup_field, Player, Ball,
     move_player, handle_player_collisions, handle_ball_kicks,
-    calculate_base_reward, reset_positions
+    calculate_base_reward
 )
 
 
@@ -36,16 +36,73 @@ TOTAL_FRAMES = 0
 # ----------------- ENVIRONMENT & ENTITIES -----------------
 player1_goal, player2_goal = setup_field()
 
-player1_entity = Player(position=(-15, 0, 0), color=color.orange, rotation_y=90)
-player2_entity = Player(position=(15, 0, 0), color=color.blue, rotation_y=-90)
-ball = Ball(position=(0,0,0))
+# These will be created/reset for each episode
+player1_entity = None
+player2_entity = None
+ball = None
+agent_player1 = None
+agent_player2 = None
+last_dist_to_ball_p1 = None
+last_dist_to_ball_p2 = None
+
 
 # ----------------- AGENTS -----------------
-agent_player1 = DQNAgent(player1_entity, player2_entity, ball, player1_goal, player2_goal, 'player1', DQN_CONFIG)
-agent_player2 = DQNAgent(player2_entity, player1_entity, ball, player2_goal, player1_goal, 'player2', DQN_CONFIG)
+def setup_episode():
+    global player1_entity, player2_entity, ball, agent_player1, agent_player2, last_dist_to_ball_p1, last_dist_to_ball_p2
 
-agent_player1.load_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player1.pth")
-agent_player2.load_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player2.pth")
+    # Clear previous entities if they exist, to prevent duplicates in the scene
+    if player1_entity:
+        destroy(player1_entity)
+    if player2_entity:
+        destroy(player2_entity)
+    if ball:
+        destroy(ball)
+
+    player1_entity = Player(position=(-15, 0, 0), color=color.orange, rotation_y=90)
+    player2_entity = Player(position=(15, 0, 0), color=color.blue, rotation_y=-90)
+    ball = Ball(position=(0,0,0))
+    
+    # We need to preserve the learned models, so we create new agents but load the existing models.
+    # We also need to preserve the replay buffer and steps_done.
+    
+    # Store old agent's learning progress
+    p1_policy_net = agent_player1.policy_net if agent_player1 else None
+    p1_target_net = agent_player1.target_net if agent_player1 else None
+    p1_memory = agent_player1.memory if agent_player1 else None
+    p1_steps = agent_player1.steps_done if agent_player1 else 0
+
+    p2_policy_net = agent_player2.policy_net if agent_player2 else None
+    p2_target_net = agent_player2.target_net if agent_player2 else None
+    p2_memory = agent_player2.memory if agent_player2 else None
+    p2_steps = agent_player2.steps_done if agent_player2 else 0
+
+    agent_player1 = DQNAgent(player1_entity, player2_entity, ball, player1_goal, player2_goal, 'player1', DQN_CONFIG)
+    agent_player2 = DQNAgent(player2_entity, player1_entity, ball, player2_goal, player1_goal, 'player2', DQN_CONFIG)
+
+    # Restore learning progress to new agents
+    if p1_policy_net:
+        agent_player1.policy_net.load_state_dict(p1_policy_net.state_dict())
+    else: # Load from file on first run
+        agent_player1.load_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player1.pth")
+    if p1_target_net:
+        agent_player1.target_net.load_state_dict(p1_target_net.state_dict())
+    if p1_memory:
+        agent_player1.memory = p1_memory
+    agent_player1.steps_done = p1_steps
+    
+    if p2_policy_net:
+        agent_player2.policy_net.load_state_dict(p2_policy_net.state_dict())
+    else: # Load from file on first run
+        agent_player2.load_model(GAME_CONFIG['SAVE_DIR'], "dqn_soccer_player2.pth")
+    if p2_target_net:
+        agent_player2.target_net.load_state_dict(p2_target_net.state_dict())
+    if p2_memory:
+        agent_player2.memory = p2_memory
+    agent_player2.steps_done = p2_steps
+
+    last_dist_to_ball_p1 = None
+    last_dist_to_ball_p2 = None
+
 
 # ----------------- UI -----------------
 score_display = Text(origin=(0,0), y=0.4, scale=1.5, background=True)
@@ -66,7 +123,7 @@ def start_new_game():
     score = {'player1': 0, 'player2': 0}
     time_left = GAME_CONFIG['GAME_TIMER_SECONDS']
     game_over = False
-    reset_positions(player1_entity, player2_entity, ball, agent_player1, agent_player2)
+    setup_episode()
     episode_frame_count = 0
     update_score_ui()
     if GAME_CONFIG['SHOULD_RENDER']:
@@ -74,7 +131,7 @@ def start_new_game():
 
 # ----------------- MAIN UPDATE LOOP -----------------
 def update():
-    global time_left, game_over, score, episode_frame_count, TOTAL_FRAMES
+    global time_left, game_over, score, episode_frame_count, TOTAL_FRAMES, last_dist_to_ball_p1, last_dist_to_ball_p2
     if game_over: return
     dt = time.dt
     if dt == 0: return
@@ -100,8 +157,8 @@ def update():
     handle_player_collisions(player1_entity, player2_entity)
 
     # --- REWARD CALCULATION ---
-    reward_player1 = calculate_base_reward(agent_player1, ball)
-    reward_player2 = calculate_base_reward(agent_player2, ball)
+    reward_player1, last_dist_to_ball_p1 = calculate_base_reward(agent_player1, ball, last_dist_to_ball_p1)
+    reward_player2, last_dist_to_ball_p2 = calculate_base_reward(agent_player2, ball, last_dist_to_ball_p2)
 
     # --- PHYSICS & KICK REWARDS ---
     prev_ball_dist_to_player1_goal = distance_xz(ball.position, player1_goal.position)
@@ -149,7 +206,7 @@ def update():
 
     if done:
         if GAME_CONFIG['SHOULD_RENDER']: update_score_ui()
-        reset_positions(player1_entity, player2_entity, ball, agent_player1, agent_player2)
+        setup_episode()
         episode_frame_count = 0
 
 # ----------------- SIMULATION RUNNER -----------------

@@ -177,19 +177,11 @@ def handle_ball_kicks(hit_info, ball, player1_goal, player2_goal, player1_entity
              kick_reward_player2 += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
     return kick_reward_player1, kick_reward_player2
 
-def calculate_base_reward(agent, ball):
+def calculate_base_reward(agent, ball, last_dist_to_ball):
     reward = DQN_CONFIG['PENALTY_TIME']
     
     current_dist_to_ball = distance_xz(agent.player.position, ball.position)
-    if agent.last_dist_to_ball is not None:
-        reward += (agent.last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
-    agent.last_dist_to_ball = current_dist_to_ball
-        
-    return reward
-
-def reset_positions(player1_entity, player2_entity, ball, agent_player1, agent_player2):
-    player1_entity.position = (-15, 0, 0); player1_entity.rotation = (0, 90, 0)
-    player2_entity.position = (15, 0, 0); player2_entity.rotation = (0, -90, 0)
-    ball.position = (0, 0, 0); ball.velocity = Vec3(0,0,0)
-    agent_player1.last_dist_to_ball = None
-    agent_player2.last_dist_to_ball = None 
+    if last_dist_to_ball is not None:
+        reward += (last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
+    
+    return reward, current_dist_to_ball 

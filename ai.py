@@ -55,7 +55,6 @@ class DQNAgent:
         self.action_size = self.config['ACTION_SIZE']
         self.memory = ReplayBuffer(self.config['MEMORY_CAPACITY'])
         self.steps_done = 0
-        self.last_dist_to_ball = None
 
         self.policy_net = DQN(self.state_size, self.action_size).to(device)
         self.target_net = DQN(self.state_size, self.action_size).to(device)
