@@ -18,11 +18,18 @@ PHYSICS_CONFIG = {
     'KICK_LIFT': 6,
 }
 
+# --- AI Action Definitions ---
+ACTIONS = {
+    'TURN_LEFT': 0,
+    'TURN_RIGHT': 1,
+    'ACCELERATE': 2,
+}
+
 # --- AI Hyperparameters ---
 DQN_CONFIG = {
     # Network and State
-    'STATE_SIZE': 16,  # Player/Ball/Goals/Opponent vectors (12) + Player Velocity (2) + Angles (2)
-    'ACTION_SIZE': 3,  # Turn Left, Turn Right, Accelerate Forward
+    # 'STATE_SIZE': 16, # This will be determined dynamically
+    # 'ACTION_SIZE': 3, # This is now len(ACTIONS)
     # Training
     'BATCH_SIZE': 128,
     'GAMMA': 0.99,       # Discount factor

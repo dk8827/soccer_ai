@@ -8,7 +8,7 @@ from collections import deque, namedtuple
 import math
 import os
 from ursina import Vec3
-from config import GAME_CONFIG, PHYSICS_CONFIG
+from config import GAME_CONFIG, PHYSICS_CONFIG, ACTIONS
 
 # ----------------- DEEP Q-LEARNING SETUP -----------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -52,8 +52,10 @@ class DQNAgent:
         self.config = config
         self.last_dist_to_ball = None
 
-        self.state_size = self.config['STATE_SIZE']
-        self.action_size = self.config['ACTION_SIZE']
+        # Dynamically determine state and action sizes
+        self.state_size = self.get_state().shape[1]
+        self.action_size = len(ACTIONS)
+        
         self.memory = ReplayBuffer(self.config['MEMORY_CAPACITY'])
         self.steps_done = 0
 

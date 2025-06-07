@@ -3,7 +3,7 @@ import math
 import random
 from panda3d.core import Quat
 
-from config import GAME_CONFIG, PHYSICS_CONFIG, DQN_CONFIG
+from config import GAME_CONFIG, PHYSICS_CONFIG, DQN_CONFIG, ACTIONS
 
 goal_width = 20
 ground = None # Will be initialized in setup_field
@@ -164,11 +164,11 @@ def move_player(player, action):
     dt = time.dt
     if dt == 0: return
 
-    if action_id == 0: # Turn Left
+    if action_id == ACTIONS['TURN_LEFT']: # Turn Left
         player.rotation_y -= PHYSICS_CONFIG['PLAYER_TURN_SPEED'] * dt
-    elif action_id == 1: # Turn Right
+    elif action_id == ACTIONS['TURN_RIGHT']: # Turn Right
         player.rotation_y += PHYSICS_CONFIG['PLAYER_TURN_SPEED'] * dt
-    elif action_id == 2: # Accelerate Forward
+    elif action_id == ACTIONS['ACCELERATE']: # Accelerate Forward
         player.velocity += player.forward * dt * PHYSICS_CONFIG.get('PLAYER_ACCELERATION', 40)
         # Cap speed
         max_speed = PHYSICS_CONFIG.get('PLAYER_MAX_SPEED', 15)
