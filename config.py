@@ -1,6 +1,6 @@
 # --- Game & Simulation Config ---
 GAME_CONFIG = {
-    'SHOULD_RENDER': False,
+    'SHOULD_RENDER': True,
     'FIELD_WIDTH': 40,
     'FIELD_LENGTH': 25,
     'GAME_TIMER_SECONDS': 60,
@@ -12,8 +12,8 @@ GAME_CONFIG = {
 PHYSICS_CONFIG = {
     'PLAYER_MOVE_SPEED': 12,
     'PLAYER_TURN_SPEED': 200,
-    'KICK_STRENGTH': 15,
-    'KICK_LIFT': 4,
+    'KICK_STRENGTH': 10,
+    'KICK_LIFT': 8,
 }
 
 # --- AI Hyperparameters ---

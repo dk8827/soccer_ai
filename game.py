@@ -56,6 +56,11 @@ class Player(Entity):
         Entity(parent=self, model='sphere', color=color.white, scale=0.3, position=(eye_dist, eye_y, eye_z_offset))
         Entity(parent=self, model='sphere', color=color.black, scale=0.15, position=(eye_dist, eye_y, eye_z_offset + 0.01))
 
+    def update(self):
+        """Ensure the player stays on top of the ground."""
+        if ground:
+            self.y = ground.y + self.scale_y / 2
+
 class Ball(Entity):
     def __init__(self, position):
         super().__init__(model='sphere', texture='assets/soccer_ball_texture.png', position=position, scale=1.2, collider='sphere')
@@ -179,13 +184,6 @@ def calculate_base_reward(agent, ball):
     if agent.last_dist_to_ball is not None:
         reward += (agent.last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
     agent.last_dist_to_ball = current_dist_to_ball
-
-    vec_goal_to_agent = (agent.player.position - agent.own_goal.position).xz
-    vec_goal_to_ball = (ball.position - agent.own_goal.position).xz
-    ball_on_my_side = (agent.team_name == 'player1' and ball.x < 0) or \
-                      (agent.team_name == 'player2' and ball.x > 0)
-    if ball_on_my_side and vec_goal_to_agent.length() < vec_goal_to_ball.length():
-        reward += DQN_CONFIG['REWARD_DEFENSIVE_POS']
         
     return reward
 
