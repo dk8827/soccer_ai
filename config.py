@@ -3,24 +3,26 @@ GAME_CONFIG = {
     'SHOULD_RENDER': True,
     'FIELD_WIDTH': 40,
     'FIELD_LENGTH': 25,
-    'GAME_TIMER_SECONDS': 60,
+    'GAME_TIMER_SECONDS': 15,
     'NUM_GAMES_TO_RUN': 100,
     'SAVE_DIR': "models",
 }
 
 # --- Physics & Gameplay Config ---
 PHYSICS_CONFIG = {
-    'PLAYER_MOVE_SPEED': 12,
+    'PLAYER_ACCELERATION': 20,
+    'PLAYER_MAX_SPEED': 13,
+    'PLAYER_FRICTION': 1.5,
     'PLAYER_TURN_SPEED': 200,
     'KICK_STRENGTH': 10,
-    'KICK_LIFT': 8,
+    'KICK_LIFT': 6,
 }
 
 # --- AI Hyperparameters ---
 DQN_CONFIG = {
     # Network and State
-    'STATE_SIZE': 14,  # Updated: 12 original + 2 new angle features
-    'ACTION_SIZE': 3,  # Turn Left, Turn Right, Move Forward
+    'STATE_SIZE': 16,  # Player/Ball/Goals/Opponent vectors (12) + Player Velocity (2) + Angles (2)
+    'ACTION_SIZE': 3,  # Turn Left, Turn Right, Accelerate Forward
     # Training
     'BATCH_SIZE': 128,
     'GAMMA': 0.99,       # Discount factor

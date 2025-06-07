@@ -55,11 +55,21 @@ class Player(Entity):
         Entity(parent=self, model='sphere', color=color.black, scale=0.15, position=(-eye_dist, eye_y, eye_z_offset + 0.01))
         Entity(parent=self, model='sphere', color=color.white, scale=0.3, position=(eye_dist, eye_y, eye_z_offset))
         Entity(parent=self, model='sphere', color=color.black, scale=0.15, position=(eye_dist, eye_y, eye_z_offset + 0.01))
+        self.velocity = Vec3(0,0,0)
 
     def update(self):
-        """Ensure the player stays on top of the ground."""
+        """Applies velocity, friction, and ensures player stays on the ground and within bounds."""
+        dt = time.dt
+        if dt == 0: return
+
+        self.position += self.velocity * dt
+        # Apply friction
+        self.velocity = lerp(self.velocity, Vec3(0,0,0), dt * PHYSICS_CONFIG.get('PLAYER_FRICTION', 1.5))
+
         if ground:
             self.y = ground.y + self.scale_y / 2
+        
+        clamp_player_position(self)
 
 class Ball(Entity):
     def __init__(self, position):
@@ -158,10 +168,12 @@ def move_player(player, action):
         player.rotation_y -= PHYSICS_CONFIG['PLAYER_TURN_SPEED'] * dt
     elif action_id == 1: # Turn Right
         player.rotation_y += PHYSICS_CONFIG['PLAYER_TURN_SPEED'] * dt
-    elif action_id == 2: # Move Forward
-        player.position += player.forward * dt * PHYSICS_CONFIG['PLAYER_MOVE_SPEED']
-
-    clamp_player_position(player)
+    elif action_id == 2: # Accelerate Forward
+        player.velocity += player.forward * dt * PHYSICS_CONFIG.get('PLAYER_ACCELERATION', 40)
+        # Cap speed
+        max_speed = PHYSICS_CONFIG.get('PLAYER_MAX_SPEED', 15)
+        if player.velocity.length() > max_speed:
+            player.velocity = player.velocity.normalized() * max_speed
 
 def handle_ball_kicks(hit_info, ball, player1_goal, player2_goal, player1_entity, player2_entity, prev_ball_dist_to_player1_goal, prev_ball_dist_to_player2_goal):
     kick_reward_player1, kick_reward_player2 = 0, 0

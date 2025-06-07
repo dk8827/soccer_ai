@@ -75,6 +75,10 @@ class DQNAgent:
         ball_vel = self.ball.velocity / PHYSICS_CONFIG['KICK_STRENGTH']
         p_fwd = self.player.forward
 
+        # Player velocity, normalized
+        max_speed = PHYSICS_CONFIG.get('PLAYER_MAX_SPEED', 15)
+        p_vel = self.player.velocity / max_speed if max_speed > 0 else Vec3(0,0,0)
+
         # NEW: Dot products to represent angles
         angle_to_ball = p_fwd.dot(vec_to_ball.normalized())
         angle_to_opp_goal = p_fwd.dot(vec_to_opp_goal.normalized())
@@ -86,6 +90,7 @@ class DQNAgent:
             vec_to_own_goal.x, vec_to_own_goal.z,
             vec_to_opponent.x, vec_to_opponent.z,
             p_fwd.x, p_fwd.z,
+            p_vel.x, p_vel.z,
             angle_to_ball,
             angle_to_opp_goal
         ]
