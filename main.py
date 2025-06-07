@@ -99,6 +99,10 @@ class GameManager:
 
         self._update_timer(dt)
         if self.game_over: return # Check again as timer can end game
+        
+        # Increment inactivity timers for all agents
+        for agent in self.agent_manager.agents:
+            agent.time_since_last_touch += dt
 
         # Inactivity timer check
         self.no_touch_timer += dt
@@ -120,6 +124,13 @@ class GameManager:
         
         if hit_info.hit:
             self.no_touch_timer = 0 # Reset inactivity timer
+            
+            # Find the agent that hit the ball and reset its timer
+            for agent in self.agent_manager.agents:
+                if agent.player == hit_info.entity:
+                    agent.time_since_last_touch = 0
+                    break # Assuming one player hits at a time
+
             apply_kick_force(hit_info, ball, self.agent_manager.agents)
 
         # 3. Calculate rewards

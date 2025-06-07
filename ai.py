@@ -8,7 +8,7 @@ from collections import deque, namedtuple
 import math
 import os
 from ursina import Vec3
-from config import GAME_CONFIG, PHYSICS_CONFIG, ACTIONS
+from config import GAME_CONFIG, PHYSICS_CONFIG, ACTIONS, DQN_CONFIG
 
 # ----------------- DEEP Q-LEARNING SETUP -----------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -30,15 +30,21 @@ class ReplayBuffer:
         return len(self.memory)
 
 class DQN(nn.Module):
-    def __init__(self, n_observations, n_actions):
+    def __init__(self, n_observations, n_actions, hidden_layer_size):
         super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 128)
-        self.layer2 = nn.Linear(128, 128)
-        self.layer3 = nn.Linear(128, n_actions)
+        self.layer1 = nn.Linear(n_observations, hidden_layer_size)
+        self.ln1 = nn.LayerNorm(hidden_layer_size)
+        self.layer2 = nn.Linear(hidden_layer_size, hidden_layer_size)
+        self.ln2 = nn.LayerNorm(hidden_layer_size)
+        self.layer3 = nn.Linear(hidden_layer_size, n_actions)
 
     def forward(self, x):
-        x = F.relu(self.layer1(x))
-        x = F.relu(self.layer2(x))
+        x = self.layer1(x)
+        x = self.ln1(x)
+        x = F.relu(x)
+        x = self.layer2(x)
+        x = self.ln2(x)
+        x = F.relu(x)
         return self.layer3(x)
 
 class DQNAgent:
@@ -47,6 +53,8 @@ class DQNAgent:
         self.config = config
         self.max_reward = -float('inf') # Track the highest reward seen
         self.reward_history = deque(maxlen=500) # For calculating average reward
+        self.noise_scale = 0.0
+        self.time_since_last_touch = 0.0
         
         self.state_size = state_size
         self.action_size = action_size
@@ -54,9 +62,13 @@ class DQNAgent:
         self.memory = ReplayBuffer(self.config['MEMORY_CAPACITY'])
         self.steps_done = 0
 
-        self.policy_net = DQN(self.state_size, self.action_size).to(device)
-        self.target_net = DQN(self.state_size, self.action_size).to(device)
+        hidden_layer_size = self.config.get('HIDDEN_LAYER_SIZE', 128)
+
+        self.policy_net = DQN(self.state_size, self.action_size, hidden_layer_size).to(device)
+        self.target_net = DQN(self.state_size, self.action_size, hidden_layer_size).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.perturbed_net = DQN(self.state_size, self.action_size, hidden_layer_size).to(device)
+        self.perturbed_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.config['LR'], amsgrad=True)
 
     @property
@@ -65,17 +77,30 @@ class DQNAgent:
             return 0.0
         return sum(self.reward_history) / len(self.reward_history)
 
-    def select_action(self, state):
-        sample = random.random()
-        eps_threshold = self.config['EPS_END'] + (self.config['EPS_START'] - self.config['EPS_END']) * \
-            math.exp(-1. * self.steps_done / self.config['EPS_DECAY'])
-        self.steps_done += 1
+    def apply_noise(self):
+        """Copies the policy network to the perturbed network and adds noise."""
+        if not self.config.get('NOISE_ENABLED', False):
+            self.perturbed_net.load_state_dict(self.policy_net.state_dict())
+            return
+            
+        self.noise_scale = self.config['NOISE_SCALE_END'] + \
+            (self.config['NOISE_SCALE_START'] - self.config['NOISE_SCALE_END']) * \
+            math.exp(-1. * self.steps_done / self.config['NOISE_SCALE_DECAY'])
 
-        if sample > eps_threshold:
-            with torch.no_grad():
-                return self.policy_net(state).max(1)[1].view(1, 1)
-        else:
-            return torch.tensor([[random.randrange(self.action_size)]], device=device, dtype=torch.long)
+        # Load the policy network's state into the perturbed network
+        self.perturbed_net.load_state_dict(self.policy_net.state_dict())
+        
+        # Add noise to the perturbed network's parameters
+        with torch.no_grad():
+            for param in self.perturbed_net.parameters():
+                noise = torch.randn_like(param) * self.noise_scale
+                param.add_(noise)
+
+    def select_action(self, state):
+        self.steps_done += 1
+        with torch.no_grad():
+            # Action selection is now done by the perturbed network
+            return self.perturbed_net(state).max(1)[1].view(1, 1)
 
     def optimize_model(self):
         if len(self.memory) < self.config['BATCH_SIZE']:

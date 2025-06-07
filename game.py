@@ -236,21 +236,32 @@ def calculate_rewards(ctx: RewardContext):
     Calculates all rewards for the current game state and checks for terminal conditions.
     This is the single source of truth for rewards.
     """
-    rewards = {agent.team_name: 0 for agent in ctx.agents}
+    rewards = {}
     new_dists_to_ball = {}
-    
-    # 1. Base rewards and penalties
+
     for agent in ctx.agents:
-        rewards[agent.team_name] += DQN_CONFIG['PENALTY_TIME']
+        team = agent.team_name
+        player = agent.player
+        opp_goal = agent.opp_goal
         
+        # Initialize reward for this agent
+        rewards[team] = 0
+
+        # --- Penalties (applied first) ---
+        rewards[team] += DQN_CONFIG['PENALTY_TIME']
+        
+        # New escalating inactivity penalty
+        inactivity_penalty = agent.time_since_last_touch * DQN_CONFIG['PENALTY_INACTIVITY_SCALE']
+        rewards[team] += inactivity_penalty
+
         # Calculate proximity reward and create a new distance tracking dict
         prox_reward, new_dist = _calculate_proximity_reward(
-            agent.player.position, 
+            player.position, 
             ctx.ball.position, 
-            ctx.last_dists_to_ball[agent.team_name]
+            ctx.last_dists_to_ball[team]
         )
-        rewards[agent.team_name] += prox_reward
-        new_dists_to_ball[agent.team_name] = new_dist
+        rewards[team] += prox_reward
+        new_dists_to_ball[team] = new_dist
 
     # 2. Kick rewards
     if ctx.hit_info and ctx.hit_info.hit:
