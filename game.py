@@ -32,15 +32,15 @@ def setup_field():
     Entity(model='cube', texture=wall_texture, scale=(1, 1.25, goal_width), position=(-GAME_CONFIG['FIELD_WIDTH']/2 - 0.5, 10.875, 0), collider='box')
     Entity(model='cube', texture=wall_texture, scale=(1, 1.25, goal_width), position=(GAME_CONFIG['FIELD_WIDTH']/2 + 0.5, 10.875, 0), collider='box')
 
-    orange_goal_entity = Goal(clr='orange', position=(-GAME_CONFIG['FIELD_WIDTH']/2 - 0.5, 0, 0), rotation_y=-90)
-    blue_goal_entity = Goal(clr='blue', position=(GAME_CONFIG['FIELD_WIDTH']/2 + 0.5, 0, 0), rotation_y=90)
+    player1_goal_entity = Goal(clr='player1', position=(-GAME_CONFIG['FIELD_WIDTH']/2 - 0.5, 0, 0), rotation_y=-90)
+    player2_goal_entity = Goal(clr='player2', position=(GAME_CONFIG['FIELD_WIDTH']/2 + 0.5, 0, 0), rotation_y=90)
 
-    return orange_goal_entity, blue_goal_entity
+    return player1_goal_entity, player2_goal_entity
 
 class Goal(Entity):
     def __init__(self, clr, **kwargs):
         super().__init__(**kwargs)
-        w, h = 20, 10; recess_depth = 2; frame_color = color.orange if clr == 'orange' else color.blue
+        w, h = 20, 10; recess_depth = 2; frame_color = color.orange if clr == 'player1' else color.blue
         Entity(parent=self, model='cube', collider='box', scale=(w, .5, .5), position=(0, h, recess_depth), color=frame_color)
         Entity(parent=self, model='cube', collider='box', scale=(.5, h, .5), position=(-w/2, h/2, recess_depth), color=frame_color)
         Entity(parent=self, model='cube', collider='box', scale=(.5, h, .5), position=(w/2, h/2, recess_depth), color=frame_color)
@@ -110,13 +110,13 @@ def clamp_player_position(player):
     player.x = clamp(player.x, -GAME_CONFIG['FIELD_WIDTH']/2 + aabb_half_width, GAME_CONFIG['FIELD_WIDTH']/2 - aabb_half_width)
     player.z = clamp(player.z, -GAME_CONFIG['FIELD_LENGTH']/2 + aabb_half_depth, GAME_CONFIG['FIELD_LENGTH']/2 - aabb_half_depth)
 
-def handle_player_collisions(player_orange_entity, player_blue_entity):
+def handle_player_collisions(player1_entity, player2_entity):
     """ Detects and resolves collisions between the two players. """
-    if player_orange_entity.intersects(player_blue_entity).hit:
-        p_pos_o = player_orange_entity.position
-        p_pos_b = player_blue_entity.position
+    if player1_entity.intersects(player2_entity).hit:
+        p_pos_1 = player1_entity.position
+        p_pos_2 = player2_entity.position
 
-        direction = p_pos_o - p_pos_b
+        direction = p_pos_1 - p_pos_2
         direction.y = 0
         dist = direction.length()
 
@@ -133,16 +133,16 @@ def handle_player_collisions(player_orange_entity, player_blue_entity):
             radius_z = abs(axis.dot(z_axis)) * (player.scale_z / 2)
             return radius_x + radius_z
 
-        radius_o = get_projected_radius(player_orange_entity, direction)
-        radius_b = get_projected_radius(player_blue_entity, direction)
+        radius_1 = get_projected_radius(player1_entity, direction)
+        radius_2 = get_projected_radius(player2_entity, direction)
 
-        overlap = (radius_o + radius_b) - dist
+        overlap = (radius_1 + radius_2) - dist
 
         if overlap > 0:
-            player_orange_entity.position += direction * (overlap / 2)
-            player_blue_entity.position -= direction * (overlap / 2)
-            clamp_player_position(player_orange_entity)
-            clamp_player_position(player_blue_entity)
+            player1_entity.position += direction * (overlap / 2)
+            player2_entity.position -= direction * (overlap / 2)
+            clamp_player_position(player1_entity)
+            clamp_player_position(player2_entity)
 
 def move_player(player, action):
     action_id = action.item()
@@ -158,19 +158,19 @@ def move_player(player, action):
 
     clamp_player_position(player)
 
-def handle_ball_kicks(hit_info, ball, orange_goal, blue_goal, player_orange_entity, player_blue_entity, prev_ball_dist_to_orange_goal, prev_ball_dist_to_blue_goal):
-    kick_reward_orange, kick_reward_blue = 0, 0
-    if hit_info.entity == player_orange_entity:
-        ball.velocity = player_orange_entity.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
-        kick_reward_orange += DQN_CONFIG['REWARD_KICK']
-        if distance_xz(ball.position, blue_goal.position) < prev_ball_dist_to_blue_goal:
-            kick_reward_orange += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
-    elif hit_info.entity == player_blue_entity:
-        ball.velocity = player_blue_entity.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
-        kick_reward_blue += DQN_CONFIG['REWARD_KICK']
-        if distance_xz(ball.position, orange_goal.position) < prev_ball_dist_to_orange_goal:
-             kick_reward_blue += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
-    return kick_reward_orange, kick_reward_blue
+def handle_ball_kicks(hit_info, ball, player1_goal, player2_goal, player1_entity, player2_entity, prev_ball_dist_to_player1_goal, prev_ball_dist_to_player2_goal):
+    kick_reward_player1, kick_reward_player2 = 0, 0
+    if hit_info.entity == player1_entity:
+        ball.velocity = player1_entity.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
+        kick_reward_player1 += DQN_CONFIG['REWARD_KICK']
+        if distance_xz(ball.position, player2_goal.position) < prev_ball_dist_to_player2_goal:
+            kick_reward_player1 += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
+    elif hit_info.entity == player2_entity:
+        ball.velocity = player2_entity.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
+        kick_reward_player2 += DQN_CONFIG['REWARD_KICK']
+        if distance_xz(ball.position, player1_goal.position) < prev_ball_dist_to_player1_goal:
+             kick_reward_player2 += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
+    return kick_reward_player1, kick_reward_player2
 
 def calculate_base_reward(agent, ball):
     reward = DQN_CONFIG['PENALTY_TIME']
@@ -182,16 +182,16 @@ def calculate_base_reward(agent, ball):
 
     vec_goal_to_agent = (agent.player.position - agent.own_goal.position).xz
     vec_goal_to_ball = (ball.position - agent.own_goal.position).xz
-    ball_on_my_side = (agent.team_name == 'orange' and ball.x < 0) or \
-                      (agent.team_name == 'blue' and ball.x > 0)
+    ball_on_my_side = (agent.team_name == 'player1' and ball.x < 0) or \
+                      (agent.team_name == 'player2' and ball.x > 0)
     if ball_on_my_side and vec_goal_to_agent.length() < vec_goal_to_ball.length():
         reward += DQN_CONFIG['REWARD_DEFENSIVE_POS']
         
     return reward
 
-def reset_positions(player_orange_entity, player_blue_entity, ball, agent_orange, agent_blue):
-    player_orange_entity.position = (-15, 0, 0); player_orange_entity.rotation = (0, 90, 0)
-    player_blue_entity.position = (15, 0, 0); player_blue_entity.rotation = (0, -90, 0)
+def reset_positions(player1_entity, player2_entity, ball, agent_player1, agent_player2):
+    player1_entity.position = (-15, 0, 0); player1_entity.rotation = (0, 90, 0)
+    player2_entity.position = (15, 0, 0); player2_entity.rotation = (0, -90, 0)
     ball.position = (0, 0, 0); ball.velocity = Vec3(0,0,0)
-    agent_orange.last_dist_to_ball = None
-    agent_blue.last_dist_to_ball = None 
+    agent_player1.last_dist_to_ball = None
+    agent_player2.last_dist_to_ball = None 
