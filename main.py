@@ -36,18 +36,28 @@ class GameManager:
         # Game State
         self.score = {'player1': 0, 'player2': 0}
         self.game_over = False
+        self.simulation_running = False
         self.time_left = GAME_CONFIG['GAME_TIMER_SECONDS']
         self.game_number = 0
         self.episode_frame_count = 0
         self.TOTAL_FRAMES = 0
 
         # UI & Environment
-        self.ui_manager = UIManager()
+        self.ui_manager = UIManager(start_callback=self.start_simulation)
         player1_goal, player2_goal, ground = setup_field()
         
         # Managers
         self.entity_manager = EntityManager(ground, player1_goal, player2_goal)
         self.agent_manager = AgentManager(self.entity_manager, player1_goal, player2_goal)
+
+
+    def start_simulation(self):
+        """Callback to start the simulation, typically from a UI button."""
+        if self.simulation_running: return
+        self.simulation_running = True
+        if GAME_CONFIG['SHOULD_RENDER']:
+            self.ui_manager.destroy_start_button()
+        self.start_new_game()
 
 
     def start_new_game(self):
@@ -69,12 +79,24 @@ class GameManager:
 
     def update(self):
         """Main update loop, called by Ursina every frame."""
-        if self.game_over: return
+        if not self.simulation_running:
+            return
+
+        if self.game_over:
+            print(f"Game {self.game_number + 1} Finished. Final Score: Player1 {self.score['player1']} - Player2 {self.score['player2']}")
+            print("-" * 40)
+            self.game_number += 1
+            if self.game_number < GAME_CONFIG['NUM_GAMES_TO_RUN']:
+                self.start_new_game()
+            else:
+                self.end_simulation()
+            return
+
         dt = time.dt
         if dt == 0: return
 
         self._update_timer(dt)
-        if self.game_over: return
+        if self.game_over: return # Check again as timer can end game
 
         # 1. Get AI actions and move players
         states, actions = self.agent_manager.get_actions_and_states()
@@ -127,20 +149,17 @@ class GameManager:
         self.ui_manager.update_timer(self.time_left)
 
 
-    def run_simulation(self, num_games_to_play):
+    def run_headless_simulation(self):
         """Runs the main simulation loop for a specified number of games."""
-        for i in range(num_games_to_play):
-            self.game_number = i
-            self.start_new_game()
-            while not self.game_over:
-                app.step()
+        self.start_simulation()
+        while True:
+            app.step()
+            a_different_time.sleep(0.01)
 
-            print(f"Game {self.game_number + 1} Finished. Final Score: Player1 {self.score['player1']} - Player2 {self.score['player2']}")
-            print("-" * 40)
-            if not GAME_CONFIG['SHOULD_RENDER']:
-                 a_different_time.sleep(0.01)
 
-        print(f"--- Simulation of {num_games_to_play} games complete. Saving final models. ---")
+    def end_simulation(self):
+        """Cleans up and exits the simulation."""
+        print(f"--- Simulation of {GAME_CONFIG['NUM_GAMES_TO_RUN']} games complete. Saving final models. ---")
         self.agent_manager.save_final_models()
         sys.exit()
 
@@ -166,4 +185,7 @@ def input(key):
 
 if __name__ == '__main__':
     game_manager = GameManager()
-    game_manager.run_simulation(GAME_CONFIG['NUM_GAMES_TO_RUN'])
+    if GAME_CONFIG['SHOULD_RENDER']:
+        app.run()
+    else:
+        game_manager.run_headless_simulation()
