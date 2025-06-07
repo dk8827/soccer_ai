@@ -17,6 +17,7 @@ PHYSICS_CONFIG = {
     'PLAYER_FRICTION': 1.5,
     'PLAYER_TURN_SPEED': 200,
     'KICK_STRENGTH': 10,
+    'KICK_VELOCITY_BONUS': 0.5, # Multiplier for player's forward speed on kick
     'KICK_LIFT': 6,
     'BALL_BOUNCINESS': 0.6,
     'BALL_WALL_BOUNCINESS': 0.9,

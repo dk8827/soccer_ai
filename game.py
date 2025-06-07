@@ -199,7 +199,14 @@ def apply_kick_force(hit_info, ball, agents):
     kicker_agent = next((agent for agent in agents if agent.player == kicker), None)
 
     if kicker_agent:
-        ball.velocity = kicker.forward * PHYSICS_CONFIG['KICK_STRENGTH'] + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
+        # Calculate bonus from player's forward velocity
+        forward_speed = max(0, kicker.velocity.dot(kicker.forward))
+        velocity_bonus = forward_speed * PHYSICS_CONFIG.get('KICK_VELOCITY_BONUS', 0.5)
+        
+        # Calculate final kick strength
+        final_strength = PHYSICS_CONFIG['KICK_STRENGTH'] + velocity_bonus
+
+        ball.velocity = kicker.forward * final_strength + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
 
 def _calculate_kick_rewards(hit_info, ball, agents, prev_ball_dist_to_opp_goals):
     """Calculates rewards for kicking the ball."""
