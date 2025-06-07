@@ -11,12 +11,43 @@ class UIManager:
             self.start_button = None
             return
 
-        self.score_display = Text(origin=(0,0), y=0.4, scale=1.5, background=True)
-        self.timer_display = Text("00:00", origin=(0,0), y=0.35, scale=1.2, background=True)
-        self.no_touch_timer_display = Text("00", origin=(0,0), y=0.3, scale=1.2, background=True)
+        # Clean text displays without backgrounds
+        self.score_display = Text(
+            origin=(0,0), 
+            y=0.42, 
+            scale=2.0, 
+            color=color.white,
+            background=False
+        )
+        
+        self.timer_display = Text(
+            "00:00", 
+            origin=(0,0), 
+            y=0.36, 
+            scale=1.4, 
+            color=color.yellow,
+            background=False
+        )
+        
+        self.no_touch_timer_display = Text(
+            "00", 
+            origin=(0,0), 
+            y=0.3, 
+            scale=1.1, 
+            color=color.orange,
+            background=False
+        )
+        
         self.update_score({'player1': 0, 'player2': 0}) # Initialize score text
 
-        self.start_button = Button(text='Start', color=color.azure, scale=(0.15, 0.05), y=0)
+        # Improved start button styling
+        self.start_button = Button(
+            text='Start Game', 
+            color=color.green, 
+            scale=(0.2, 0.06), 
+            y=0,
+            text_color=color.white
+        )
         self.start_button.on_click = start_callback
 
     def update_score(self, score):
