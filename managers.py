@@ -81,6 +81,8 @@ class AgentManager:
                 'reward_buffer': 0.0,
                 'last_state': None,
                 'last_macro_action_id': None,
+                'last_macro_duration': 0,
+                'frames_executed_in_macro': 0,
             })
 
         self.reset_episode()
@@ -97,6 +99,8 @@ class AgentManager:
             tracker['reward_buffer'] = 0.0
             tracker['last_state'] = None
             tracker['last_macro_action_id'] = None
+            tracker['last_macro_duration'] = 0
+            tracker['frames_executed_in_macro'] = 0
 
     def _get_wall_distance(self, player):
         """
@@ -212,8 +216,9 @@ class AgentManager:
                     next_state_tensor = torch.tensor(next_state, dtype=torch.float32, device=device).unsqueeze(0)
                     
                     reward_tensor = torch.tensor([tracker['reward_buffer']], device=device)
+                    duration_tensor = torch.tensor([tracker['last_macro_duration']], dtype=torch.float, device=device)
                     
-                    agent.memory.push(tracker['last_state'], tracker['last_macro_action_id'], next_state_tensor, reward_tensor)
+                    agent.memory.push(tracker['last_state'], tracker['last_macro_action_id'], next_state_tensor, reward_tensor, duration_tensor)
                     
                 # --- Select New Macro Action ---
                 current_state = self._get_state_for_agent(
@@ -229,8 +234,10 @@ class AgentManager:
                 tracker['last_state'] = current_state_tensor
                 tracker['last_macro_action_id'] = macro_action_tensor
                 tracker['current_macro_info'] = MACRO_ACTIONS[macro_action_id]
+                tracker['last_macro_duration'] = tracker['current_macro_info'][1]
                 tracker['frames_left'] = tracker['current_macro_info'][1]
                 tracker['reward_buffer'] = 0.0 # Reset reward buffer for the new macro
+                tracker['frames_executed_in_macro'] = 0
             
             # --- Execute Current Action ---
             tracker['frames_left'] -= 1
@@ -246,9 +253,13 @@ class AgentManager:
         transition to be stored in memory. Also triggers the optimization step.
         """
         for i, agent in enumerate(self.agents):
-            # Accumulate reward
+            # Accumulate reward, discounted by gamma for each step within the macro
             reward_val = rewards[agent.team_name]
-            self.agent_trackers[i]['reward_buffer'] += reward_val
+            gamma = DQN_CONFIG['GAMMA']
+            discount = gamma ** self.agent_trackers[i]['frames_executed_in_macro']
+            self.agent_trackers[i]['reward_buffer'] += reward_val * discount
+            self.agent_trackers[i]['frames_executed_in_macro'] += 1
+
             agent.reward_history.append(reward_val) # Keep original reward history for stats
             agent.max_reward = max(agent.max_reward, reward_val)
 
@@ -258,8 +269,11 @@ class AgentManager:
                 tracker = self.agent_trackers[i]
                 if tracker['last_state'] is not None:
                     reward_tensor = torch.tensor([tracker['reward_buffer']], device=device)
+                    # For the final transition, the duration is the number of frames actually executed
+                    duration_executed = tracker['frames_executed_in_macro']
+                    duration_tensor = torch.tensor([duration_executed], dtype=torch.float, device=device)
                     # The next_state is None because the episode terminated
-                    agent.memory.push(tracker['last_state'], tracker['last_macro_action_id'], None, reward_tensor)
+                    agent.memory.push(tracker['last_state'], tracker['last_macro_action_id'], None, reward_tensor, duration_tensor)
 
         # Optimization and target network updates still happen on a per-frame basis
         if total_frames % DQN_CONFIG['UPDATE_EVERY'] == 0:

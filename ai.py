@@ -14,7 +14,7 @@ from config import GAME_CONFIG, PHYSICS_CONFIG, ACTIONS, MACRO_ACTIONS, DQN_CONF
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward', 'duration'))
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -124,7 +124,10 @@ class DQNAgent:
             next_state_actions = self.policy_net(non_final_next_states).max(1)[1].unsqueeze(1)
             next_state_values[non_final_mask] = self.target_net(non_final_next_states).gather(1, next_state_actions).squeeze(1)
 
-        expected_state_action_values = (next_state_values * self.config['GAMMA']) + reward_batch
+        # Compute the expected Q values, now accounting for macro-action duration
+        duration_batch = torch.cat(batch.duration)
+        gamma_pow_k = self.config['GAMMA'] ** duration_batch
+        expected_state_action_values = (next_state_values * gamma_pow_k) + reward_batch
 
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
