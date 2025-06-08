@@ -38,9 +38,8 @@ ACTIONS = {
 DQN_CONFIG = {
     # Network and State
     'HIDDEN_LAYER_SIZE': 128,
-    # 'ACTION_SIZE': 3, # This is now len(ACTIONS)
     # Training
-    'BATCH_SIZE': 64,
+    'BATCH_SIZE': 128,
     'GAMMA': 0.99,       # Discount factor
     'LR': 1e-4,          # Learning Rate
     'TAU': 0.005,        # Target network soft update rate
@@ -56,7 +55,7 @@ DQN_CONFIG = {
     'NOISE_SCALE_DECAY': 100000,
     # Rewards
     'REWARD_GOAL': 1,
-    'REWARD_BALL_PROXIMITY_SCALE': 0.01,   # Scales reward for being close to the ball (inversely proportional to distance)
+    'REWARD_BALL_PROXIMITY_SCALE': 1,   # Scales reward for being close to the ball (inversely proportional to distance)
     'PENALTY_CONCEDE': -1,
 }
 
