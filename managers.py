@@ -80,6 +80,45 @@ class AgentManager:
             agent.apply_noise()
             agent.position_history.clear()
 
+    def _get_wall_distance(self, player):
+        """
+        Calculates the distance from the player to the nearest wall in the direction they're facing.
+        Returns a normalized distance (0 to 1) where 1 is at the wall.
+        """
+        # Get field dimensions
+        field_width = GAME_CONFIG['FIELD_WIDTH']
+        field_length = GAME_CONFIG['FIELD_LENGTH']
+        
+        # Get player's position and forward direction
+        pos = player.position
+        forward = player.forward.normalized() # Ensure the forward vector is normalized
+        
+        distances = []
+        # Calculate distance to each wall plane along the forward vector
+        if abs(forward.x) > 1e-6:
+            # Time/distance to hit vertical walls (x-planes)
+            t_to_pos_x_wall = (field_width/2 - pos.x) / forward.x
+            t_to_neg_x_wall = (-field_width/2 - pos.x) / forward.x
+            if t_to_pos_x_wall >= 0: distances.append(t_to_pos_x_wall)
+            if t_to_neg_x_wall >= 0: distances.append(t_to_neg_x_wall)
+
+        if abs(forward.z) > 1e-6:
+            # Time/distance to hit horizontal walls (z-planes)
+            t_to_pos_z_wall = (field_length/2 - pos.z) / forward.z
+            t_to_neg_z_wall = (-field_length/2 - pos.z) / forward.z
+            if t_to_pos_z_wall >= 0: distances.append(t_to_pos_z_wall)
+            if t_to_neg_z_wall >= 0: distances.append(t_to_neg_z_wall)
+
+        # Get the minimum positive distance (the closest intersection in front of the player)
+        wall_dist = min(distances) if distances else float('inf')
+
+        # Normalize the distance (0 near, 1 far)
+        # We use a large distance to represent "no wall in sight"
+        max_dist = max(field_width, field_length)
+        normalized_dist = 1.0 - clamp(wall_dist / max_dist, 0, 1) # Invert so 1 is at wall, 0 is far
+
+        return normalized_dist
+
     def _get_state_for_agent(self, player, opponent, ball, own_goal, opp_goal):
         """
         Constructs a player-centric state vector for a given agent.
@@ -116,9 +155,8 @@ class AgentManager:
         p_vel = rotate_vector(p_vel_world, player_angle_rad)
         opp_vel = rotate_vector(opp_vel_world, player_angle_rad)
 
-        # In the player's reference frame, their own forward vector is always (0, 0, 1),
-        # and angles to objects are implicitly captured by the rotated vectors.
-        # Thus, p_fwd, angle_to_ball, and angle_to_opp_goal are no longer needed.
+        # 4. Calculate wall distance
+        wall_dist = self._get_wall_distance(player)
         
         state = [
             vec_to_ball.x, vec_to_ball.z,
@@ -128,6 +166,7 @@ class AgentManager:
             vec_to_opponent.x, vec_to_opponent.z,
             p_vel.x, p_vel.z,
             opp_vel.x, opp_vel.z,
+            wall_dist,  # Add wall distance to state
         ]
         return state
 

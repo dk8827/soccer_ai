@@ -15,7 +15,7 @@ from ui import UIManager
 from game import (
     setup_field,
     move_player, handle_player_collisions,
-    apply_kick_force, calculate_rewards, RewardContext,
+    calculate_kick_force, calculate_rewards, RewardContext,
     distance_xz
 )
 from managers import EntityManager, AgentManager
@@ -115,16 +115,6 @@ class GameManager:
         dt = time.dt
         if dt == 0: return
 
-        self._update_timer(dt)
-        if self.game_over: return # Check again as timer can end game
-        
-        # Inactivity timer check
-        self.no_touch_timer += dt
-        if self.no_touch_timer > GAME_CONFIG['NO_TOUCH_TIMEOUT']:
-            print("--- Game ended due to inactivity. ---")
-            self.game_over = True
-            return
-
         # 1. Get AI actions and move players
         states, actions = self.agent_manager.get_actions_and_states()
         for i, action in enumerate(actions):
@@ -136,14 +126,22 @@ class GameManager:
         hit_info_p1 = ball.intersects(self.entity_manager.players[0])
         hit_info_p2 = ball.intersects(self.entity_manager.players[1])
         
+        kicker_count = 0
+        total_kick_force = Vec3(0,0,0)
+
         if hit_info_p1.hit or hit_info_p2.hit:
             self.no_touch_timer = 0 # Reset inactivity timer
             
-            # Handle both collisions if they occur simultaneously
             if hit_info_p1.hit:
-                apply_kick_force(hit_info_p1, ball, self.agent_manager.agents)
+                total_kick_force += calculate_kick_force(hit_info_p1, ball)
+                kicker_count += 1
             if hit_info_p2.hit:
-                apply_kick_force(hit_info_p2, ball, self.agent_manager.agents)
+                total_kick_force += calculate_kick_force(hit_info_p2, ball)
+                kicker_count += 1
+        
+        if kicker_count > 0:
+            # Average the kick forces with the ball's current velocity to prevent extreme speeds
+            ball.velocity = (ball.velocity + total_kick_force) / (kicker_count + 1)
 
         # 3. Calculate rewards
         ctx = RewardContext(
@@ -155,15 +153,29 @@ class GameManager:
         )
         rewards, done, scoring_team = calculate_rewards(ctx)
 
-        # 4. Update AI learning
+        # 4. Check for episode/game end via timers
+        self._update_timer(dt)
+        self.no_touch_timer += dt
+        timeout_done = self.time_left <= 0 or self.no_touch_timer > GAME_CONFIG['NO_TOUCH_TIMEOUT']
+        episode_is_done = done or timeout_done
+
+        # 5. Update AI learning
         self.TOTAL_FRAMES += 1
         self.episode_frame_count += 1
-        self.agent_manager.update_learning(states, actions, rewards, done, self.TOTAL_FRAMES)
+        self.agent_manager.update_learning(states, actions, rewards, episode_is_done, self.TOTAL_FRAMES)
         self.ui_manager.update_reward_displays(self.agent_manager.agents)
         self.ui_manager.update_game_info(self.game_number, self.TOTAL_FRAMES)
 
-        # 5. Check for episode end
-        if done:
+        # 6. Check for episode or game state changes
+        if timeout_done and not self.game_over:
+            self.game_over = True
+            if self.time_left <= 0:
+                print("--- Game ended due to time limit. ---")
+            else: # Inactivity
+                print("--- Game ended due to inactivity. ---")
+            return # Exit this frame's update to prevent goal logic from running
+
+        if done: # This 'done' only comes from a goal now
             if scoring_team:
                 self.waiting_for_reset = True
                 self.score[scoring_team] += 1
@@ -178,11 +190,6 @@ class GameManager:
                     self.waiting_for_reset = False
 
                 self.ui_manager.flash_goal_scored(scoring_team, on_goal_anim_complete)
-            else:
-                 # If no one scored (e.g., timeout), reset immediately
-                self.entity_manager.reset_episode(self.TOTAL_FRAMES)
-                self.agent_manager.reset_episode()
-                self.episode_frame_count = 0
 
 
     def _update_timer(self, dt):
@@ -190,7 +197,7 @@ class GameManager:
         self.time_left -= dt
         if self.time_left <= 0:
             self.time_left = 0
-            self.game_over = True
+            # self.game_over is now set in the main update loop to ensure correct learning state
         self.ui_manager.update_timer(self.time_left)
         self.ui_manager.update_no_touch_timer(self.no_touch_timer)
 

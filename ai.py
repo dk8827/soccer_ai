@@ -33,18 +33,18 @@ class DQN(nn.Module):
     def __init__(self, n_observations, n_actions, hidden_layer_size):
         super(DQN, self).__init__()
         self.layer1 = nn.Linear(n_observations, hidden_layer_size)
-        self.ln1 = nn.LayerNorm(hidden_layer_size)
+        self.dropout1 = nn.Dropout(0.1)
         self.layer2 = nn.Linear(hidden_layer_size, hidden_layer_size)
-        self.ln2 = nn.LayerNorm(hidden_layer_size)
+        self.dropout2 = nn.Dropout(0.1)
         self.layer3 = nn.Linear(hidden_layer_size, n_actions)
 
     def forward(self, x):
         x = self.layer1(x)
-        x = self.ln1(x)
         x = F.relu(x)
+        x = self.dropout1(x)
         x = self.layer2(x)
-        x = self.ln2(x)
         x = F.relu(x)
+        x = self.dropout2(x)
         return self.layer3(x)
 
 class DQNAgent:
@@ -100,12 +100,15 @@ class DQNAgent:
     def select_action(self, state):
         self.steps_done += 1
         with torch.no_grad():
+            self.perturbed_net.eval() # Disable dropout for action selection
             # Action selection is now done by the perturbed network
             return self.perturbed_net(state).max(1)[1].view(1, 1)
 
     def optimize_model(self):
         if len(self.memory) < self.config['BATCH_SIZE']:
             return
+        
+        self.policy_net.train() # Enable dropout for training
 
         transitions = self.memory.sample(self.config['BATCH_SIZE'])
         batch = Transition(*zip(*transitions))
@@ -152,6 +155,7 @@ class DQNAgent:
                 print(f"Loading model for {self.team_name} from {path}")
                 self.policy_net.load_state_dict(torch.load(path, map_location=device))
                 self.target_net.load_state_dict(self.policy_net.state_dict())
+                self.policy_net.eval() # Set model to evaluation mode after loading
             except RuntimeError as e:
                 print(f"Could not load model for {self.team_name} due to architecture mismatch. Starting fresh.")
                 print(f"Error: {e}")
