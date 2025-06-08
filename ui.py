@@ -1,4 +1,4 @@
-from ursina import Text, destroy, Button, color
+from ursina import Text, destroy, Button, color, Sequence, Wait, Func, curve
 from config import GAME_CONFIG
 
 class UIManager:
@@ -12,6 +12,7 @@ class UIManager:
             self.p2_max_reward_display = None
             self.p1_avg_reward_display = None
             self.p2_avg_reward_display = None
+            self.game_info_display = None
             self.start_button = None
             return
 
@@ -78,6 +79,15 @@ class UIManager:
             background=False
         )
 
+        self.game_info_display = Text(
+            "Game: 0 | Frames: 0",
+            origin=(0, 0),
+            position=(0, -0.45),
+            scale=1.0,
+            color=color.white,
+            background=False
+        )
+
         self.update_score({'player1': 0, 'player2': 0}) # Initialize score text
 
         # Improved start button styling
@@ -110,6 +120,10 @@ class UIManager:
         self.p1_avg_reward_display.text = f"P1 Avg Reward: {agents[0].average_reward:.4f}"
         self.p2_avg_reward_display.text = f"P2 Avg Reward: {agents[1].average_reward:.4f}"
 
+    def update_game_info(self, game_number, total_frames):
+        if not self.game_info_display: return
+        self.game_info_display.text = f"Game: {game_number+1} | Frames: {total_frames}"
+
     def destroy_start_button(self):
         if self.start_button:
             destroy(self.start_button)
@@ -130,4 +144,28 @@ class UIManager:
             destroy(self.p1_avg_reward_display)
         if self.p2_avg_reward_display:
             destroy(self.p2_avg_reward_display)
-        self.destroy_start_button() 
+        if self.game_info_display:
+            destroy(self.game_info_display)
+        self.destroy_start_button()
+
+    def flash_goal_scored(self, scoring_team_name, on_complete):
+        if not GAME_CONFIG['SHOULD_RENDER']:
+            on_complete()
+            return
+            
+        goal_text = Text(
+            text=f"GOAL! {scoring_team_name}",
+            origin=(0,0),
+            scale=4,
+            color=color.gold,
+            background=True
+        )
+        
+        # Create a sequence to show, hold, then hide the text
+        goal_text.animate_scale(goal_text.scale * 1.2, duration=0.2)
+        seq = Sequence(
+            Wait(1.5),
+            Func(lambda: destroy(goal_text)),
+            Func(on_complete)
+        )
+        seq.start() 

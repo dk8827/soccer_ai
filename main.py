@@ -37,6 +37,7 @@ class GameManager:
         self.score = {'player1': 0, 'player2': 0}
         self.game_over = False
         self.simulation_running = False
+        self.waiting_for_reset = False
         self.time_left = GAME_CONFIG['GAME_TIMER_SECONDS']
         self.no_touch_timer = 0
         self.game_number = 0
@@ -68,6 +69,7 @@ class GameManager:
         self.time_left = GAME_CONFIG['GAME_TIMER_SECONDS']
         self.no_touch_timer = 0
         self.game_over = False
+        self.waiting_for_reset = False
         self.episode_frame_count = 0
         self.ui_manager.update_score(self.score)
         self.ui_manager.update_timer(self.time_left)
@@ -81,7 +83,7 @@ class GameManager:
 
     def update(self):
         """Main update loop, called by Ursina every frame."""
-        if not self.simulation_running:
+        if not self.simulation_running or self.waiting_for_reset:
             return
 
         if self.game_over:
@@ -146,15 +148,28 @@ class GameManager:
         self.episode_frame_count += 1
         self.agent_manager.update_learning(states, actions, rewards, done, self.TOTAL_FRAMES)
         self.ui_manager.update_reward_displays(self.agent_manager.agents)
+        self.ui_manager.update_game_info(self.game_number, self.TOTAL_FRAMES)
 
         # 5. Check for episode end
         if done:
             if scoring_team:
+                self.waiting_for_reset = True
                 self.score[scoring_team] += 1
-            self.ui_manager.update_score(self.score)
-            self.entity_manager.reset_episode(self.TOTAL_FRAMES)
-            self.agent_manager.reset_episode()
-            self.episode_frame_count = 0
+                self.ui_manager.update_score(self.score)
+                
+                # Use a callback to reset the episode after the "Goal!" message
+                def on_goal_anim_complete():
+                    self.entity_manager.reset_episode(self.TOTAL_FRAMES)
+                    self.agent_manager.reset_episode()
+                    self.episode_frame_count = 0
+                    self.waiting_for_reset = False
+
+                self.ui_manager.flash_goal_scored(scoring_team, on_goal_anim_complete)
+            else:
+                 # If no one scored (e.g., timeout), reset immediately
+                self.entity_manager.reset_episode(self.TOTAL_FRAMES)
+                self.agent_manager.reset_episode()
+                self.episode_frame_count = 0
 
 
     def _update_timer(self, dt):
