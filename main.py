@@ -116,8 +116,8 @@ class GameManager:
         if dt == 0: return
 
         # 1. Get AI actions and move players
-        states, actions = self.agent_manager.get_actions_and_states()
-        for i, action in enumerate(actions):
+        states, primitive_actions = self.agent_manager.get_primitive_actions_and_states()
+        for i, action in enumerate(primitive_actions):
             move_player(self.entity_manager.players[i], action)
         handle_player_collisions(self.entity_manager.players[0], self.entity_manager.players[1])
 
@@ -162,7 +162,7 @@ class GameManager:
         # 5. Update AI learning
         self.TOTAL_FRAMES += 1
         self.episode_frame_count += 1
-        self.agent_manager.update_learning(states, actions, rewards, episode_is_done, self.TOTAL_FRAMES)
+        self.agent_manager.step_learning_update(rewards, episode_is_done, self.TOTAL_FRAMES)
         self.ui_manager.update_reward_displays(self.agent_manager.agents)
         self.ui_manager.update_game_info(self.game_number, self.TOTAL_FRAMES)
 

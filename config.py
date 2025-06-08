@@ -34,6 +34,21 @@ ACTIONS = {
     'ACCELERATE': 2,
 }
 
+# --- AI Action Definitions (Macros) ---
+# Each macro is a tuple: (primitive_action_id, duration_in_frames)
+MACRO_ACTIONS = {
+    0: (ACTIONS['TURN_LEFT'], 1),      # Turn Left (~2°)
+    1: (ACTIONS['TURN_RIGHT'], 1),     # Turn Right (~2°)
+    2: (ACTIONS['TURN_LEFT'], 5),      # Turn Left (~10°)
+    3: (ACTIONS['TURN_RIGHT'], 5),     # Turn Right (~10°)
+    4: (ACTIONS['TURN_LEFT'], 15),     # Turn Left (~30°)
+    5: (ACTIONS['TURN_RIGHT'], 15),    # Turn Right (~30°)
+    6: (ACTIONS['TURN_LEFT'], 30),     # Turn Left (~60°)
+    7: (ACTIONS['TURN_RIGHT'], 30),    # Turn Right (~60°)
+    8: (ACTIONS['ACCELERATE'], 5),      # Short Burst
+    9: (ACTIONS['ACCELERATE'], 10),     # Long Burst
+}
+
 # --- AI Hyperparameters ---
 DQN_CONFIG = {
     # Network and State

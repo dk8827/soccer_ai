@@ -1,5 +1,5 @@
 from ursina import Vec3, color, lerp
-from config import GAME_CONFIG, DQN_CONFIG, ACTIONS, PHYSICS_CONFIG, CURRICULUM_CONFIG
+from config import GAME_CONFIG, DQN_CONFIG, ACTIONS, MACRO_ACTIONS, PHYSICS_CONFIG, CURRICULUM_CONFIG
 from ai import DQNAgent, device
 from game import Player, Ball
 import torch
@@ -52,33 +52,51 @@ class AgentManager:
     def __init__(self, entity_manager, player1_goal, player2_goal):
         self.entity_manager = entity_manager
         self.agents = []
+        self.agent_trackers = []
 
         goal_assignments = [(player1_goal, player2_goal), (player2_goal, player1_goal)]
         team_names = ['player1', 'player2']
         
+        # Determine state and action sizes from a sample
         sample_state = self._get_state_for_agent(
             self.entity_manager.players[0], self.entity_manager.opponents[0],
             self.entity_manager.ball, goal_assignments[0][0], goal_assignments[0][1]
         )
         state_size = len(sample_state)
-        action_size = len(ACTIONS)
+        action_size = len(MACRO_ACTIONS) # Use the number of MACRO actions
 
         for i in range(2):
             team_name = team_names[i]
             agent = DQNAgent(team_name, DQN_CONFIG, state_size, action_size)
             agent.player = self.entity_manager.players[i]
             agent.opp_goal = goal_assignments[i][1]
+            agent.own_goal = goal_assignments[i][0]
             agent.load_model(GAME_CONFIG['SAVE_DIR'], f"dqn_soccer_{team_name}.pth")
             self.agents.append(agent)
+            
+            # Initialize a tracker for each agent to handle macro actions
+            self.agent_trackers.append({
+                'current_macro_info': None, # (primitive_action_id, duration)
+                'frames_left': 0,
+                'reward_buffer': 0.0,
+                'last_state': None,
+                'last_macro_action_id': None,
+            })
 
         self.reset_episode()
 
     def reset_episode(self):
         """Resets the state for the agents for a new episode."""
-        # Apply new noise for the upcoming episode
         for agent in self.agents:
             agent.apply_noise()
             agent.position_history.clear()
+        
+        for tracker in self.agent_trackers:
+            tracker['current_macro_info'] = None
+            tracker['frames_left'] = 0
+            tracker['reward_buffer'] = 0.0
+            tracker['last_state'] = None
+            tracker['last_macro_action_id'] = None
 
     def _get_wall_distance(self, player):
         """
@@ -170,43 +188,79 @@ class AgentManager:
         ]
         return state
 
-    def get_actions_and_states(self):
-        """Gets actions from agents for the current state."""
-        states = []
-        goal_assignments = [(self.agents[0].opp_goal, self.agents[1].opp_goal), (self.agents[1].opp_goal, self.agents[0].opp_goal)]
+    def get_primitive_actions_and_states(self):
+        """
+        Decides on an action for each agent. If a macro is in progress, it continues it.
+        If not, it selects a new macro action.
+        This function is also responsible for pushing completed macro transitions to memory.
+        """
+        primitive_actions = []
+        states_for_main = [] # The 'main' loop needs states for the update_learning call, even if we don't use them there.
         
         for i, agent in enumerate(self.agents):
-            own_goal, opp_goal = (self.entity_manager.player1_goal, self.entity_manager.player2_goal) if agent.team_name == 'player1' else (self.entity_manager.player2_goal, self.entity_manager.player1_goal)
-            
-            state_list = self._get_state_for_agent(
-                agent.player, self.entity_manager.opponents[i], self.entity_manager.ball, own_goal, opp_goal
-            )
-            states.append(torch.tensor(state_list, dtype=torch.float32, device=device).unsqueeze(0))
+            tracker = self.agent_trackers[i]
 
-        actions = [agent.select_action(state) for agent, state in zip(self.agents, states)]
-        return states, actions
-
-    def update_learning(self, states, actions, rewards, done, total_frames):
-        """Handles the learning step for each agent and model checkpointing."""
-        next_states = []
-        if not done:
-            goal_assignments = [(self.agents[0].opp_goal, self.agents[1].opp_goal), (self.agents[1].opp_goal, self.agents[0].opp_goal)]
-            for i, agent in enumerate(self.agents):
-                own_goal, opp_goal = (self.entity_manager.player1_goal, self.entity_manager.player2_goal) if agent.team_name == 'player1' else (self.entity_manager.player2_goal, self.entity_manager.player1_goal)
-                state_list = self._get_state_for_agent(
-                    agent.player, self.entity_manager.opponents[i], self.entity_manager.ball, own_goal, opp_goal
+            # --- Decision Making ---
+            if tracker['frames_left'] <= 0:
+                # --- Learning Step for the previous action ---
+                # If a macro has just completed, store the transition in memory
+                if tracker['last_state'] is not None:
+                    next_state = self._get_state_for_agent(
+                        agent.player, self.entity_manager.opponents[i], self.entity_manager.ball,
+                        agent.own_goal, agent.opp_goal
+                    )
+                    next_state_tensor = torch.tensor(next_state, dtype=torch.float32, device=device).unsqueeze(0)
+                    
+                    reward_tensor = torch.tensor([tracker['reward_buffer']], device=device)
+                    
+                    agent.memory.push(tracker['last_state'], tracker['last_macro_action_id'], next_state_tensor, reward_tensor)
+                    
+                # --- Select New Macro Action ---
+                current_state = self._get_state_for_agent(
+                    agent.player, self.entity_manager.opponents[i], self.entity_manager.ball,
+                    agent.own_goal, agent.opp_goal
                 )
-                next_states.append(torch.tensor(state_list, dtype=torch.float32, device=device).unsqueeze(0))
-        else:
-            next_states = [None] * len(self.agents)
+                current_state_tensor = torch.tensor(current_state, dtype=torch.float32, device=device).unsqueeze(0)
+                
+                macro_action_tensor = agent.select_action(current_state_tensor)
+                macro_action_id = macro_action_tensor.item()
+                
+                # Update tracker for the new macro
+                tracker['last_state'] = current_state_tensor
+                tracker['last_macro_action_id'] = macro_action_tensor
+                tracker['current_macro_info'] = MACRO_ACTIONS[macro_action_id]
+                tracker['frames_left'] = tracker['current_macro_info'][1]
+                tracker['reward_buffer'] = 0.0 # Reset reward buffer for the new macro
+            
+            # --- Execute Current Action ---
+            tracker['frames_left'] -= 1
+            primitive_action_id = tracker['current_macro_info'][0]
+            primitive_actions.append(torch.tensor([[primitive_action_id]], device=device))
+            states_for_main.append(tracker['last_state']) # Pass the state that led to the current macro
 
+        return states_for_main, primitive_actions
+
+    def step_learning_update(self, rewards, done, total_frames):
+        """
+        Accumulates rewards, and if the episode is done, it forces the final
+        transition to be stored in memory. Also triggers the optimization step.
+        """
         for i, agent in enumerate(self.agents):
-            reward_tensor = torch.tensor([rewards[agent.team_name]], device=device)
-            current_reward = rewards[agent.team_name]
-            agent.memory.push(states[i], actions[i], next_states[i], reward_tensor)
-            agent.max_reward = max(agent.max_reward, current_reward)
-            agent.reward_history.append(current_reward)
+            # Accumulate reward
+            reward_val = rewards[agent.team_name]
+            self.agent_trackers[i]['reward_buffer'] += reward_val
+            agent.reward_history.append(reward_val) # Keep original reward history for stats
 
+        if done:
+            # Episode ended. Store the final transition.
+            for i, agent in enumerate(self.agents):
+                tracker = self.agent_trackers[i]
+                if tracker['last_state'] is not None:
+                    reward_tensor = torch.tensor([tracker['reward_buffer']], device=device)
+                    # The next_state is None because the episode terminated
+                    agent.memory.push(tracker['last_state'], tracker['last_macro_action_id'], None, reward_tensor)
+
+        # Optimization and target network updates still happen on a per-frame basis
         if total_frames % DQN_CONFIG['UPDATE_EVERY'] == 0:
             for agent in self.agents:
                 agent.optimize_model()

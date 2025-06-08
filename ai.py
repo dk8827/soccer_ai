@@ -8,7 +8,7 @@ from collections import deque, namedtuple
 import math
 import os
 from ursina import Vec3
-from config import GAME_CONFIG, PHYSICS_CONFIG, ACTIONS, DQN_CONFIG
+from config import GAME_CONFIG, PHYSICS_CONFIG, ACTIONS, MACRO_ACTIONS, DQN_CONFIG
 
 # ----------------- DEEP Q-LEARNING SETUP -----------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
