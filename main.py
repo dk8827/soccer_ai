@@ -3,6 +3,7 @@ import sys
 import time as a_different_time # Use a different alias to avoid conflict with ursina's time module
 import os
 import numpy as np
+from datetime import datetime
 
 try:
     import matplotlib.pyplot as plt
@@ -42,6 +43,7 @@ class GameManager:
     """
     def __init__(self):
         # Game State
+        self.start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self.score = {'player1': 0, 'player2': 0}
         self.total_score = {'player1': 0, 'player2': 0}
         self.game_over = False
@@ -286,7 +288,8 @@ class GameManager:
         plt.tight_layout(rect=[0, 0.03, 1, 0.96])
         save_dir = "screenshots"
         if not os.path.exists(save_dir): os.makedirs(save_dir)
-        plt.savefig(os.path.join(save_dir, "training_progress.png")); plt.close(fig)
+        filename = f"training_progress_{self.start_time}.png"
+        plt.savefig(os.path.join(save_dir, filename)); plt.close(fig)
 
     def run_headless_simulation(self):
         """Runs the main simulation loop for a specified number of games."""

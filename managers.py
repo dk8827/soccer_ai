@@ -250,6 +250,7 @@ class AgentManager:
             reward_val = rewards[agent.team_name]
             self.agent_trackers[i]['reward_buffer'] += reward_val
             agent.reward_history.append(reward_val) # Keep original reward history for stats
+            agent.max_reward = max(agent.max_reward, reward_val)
 
         if done:
             # Episode ended. Store the final transition.
