@@ -274,6 +274,9 @@ class AgentManager:
                     duration_tensor = torch.tensor([duration_executed], dtype=torch.float, device=device)
                     # The next_state is None because the episode terminated
                     agent.memory.push(tracker['last_state'], tracker['last_macro_action_id'], None, reward_tensor, duration_tensor)
+                    # By resetting the last_state, we prevent the completed
+                    # macro transition from being added in the next call to get_primitive_actions_and_states.
+                    tracker['last_state'] = None
 
         # Optimization and target network updates still happen on a per-frame basis
         if total_frames % DQN_CONFIG['UPDATE_EVERY'] == 0:
