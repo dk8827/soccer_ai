@@ -100,7 +100,6 @@ class DQNAgent:
                 param.add_(noise)
 
     def select_action(self, state):
-        self.steps_done += 1
         with torch.no_grad():
             self.perturbed_net.eval() # Disable dropout for action selection
             # Action selection is now done by the perturbed network

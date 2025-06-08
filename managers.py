@@ -90,7 +90,6 @@ class AgentManager:
     def reset_episode(self):
         """Resets the state for the agents for a new episode."""
         for agent in self.agents:
-            agent.apply_noise()
             agent.position_history.clear()
         
         for tracker in self.agent_trackers:
@@ -207,7 +206,6 @@ class AgentManager:
             # --- Decision Making ---
             if tracker['frames_left'] <= 0:
                 # --- Learning Step for the previous action ---
-                # If a macro has just completed, store the transition in memory
                 if tracker['last_state'] is not None:
                     next_state = self._get_state_for_agent(
                         agent.player, self.entity_manager.opponents[i], self.entity_manager.ball,
@@ -221,6 +219,7 @@ class AgentManager:
                     agent.memory.push(tracker['last_state'], tracker['last_macro_action_id'], next_state_tensor, reward_tensor, duration_tensor)
                     
                 # --- Select New Macro Action ---
+                agent.apply_noise()
                 current_state = self._get_state_for_agent(
                     agent.player, self.entity_manager.opponents[i], self.entity_manager.ball,
                     agent.own_goal, agent.opp_goal
@@ -253,6 +252,7 @@ class AgentManager:
         transition to be stored in memory. Also triggers the optimization step.
         """
         for i, agent in enumerate(self.agents):
+            agent.steps_done = total_frames
             # Accumulate reward, discounted by gamma for each step within the macro
             reward_val = rewards[agent.team_name]
             gamma = DQN_CONFIG['GAMMA']
