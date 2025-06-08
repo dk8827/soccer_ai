@@ -45,8 +45,8 @@ MACRO_ACTIONS = {
     5: (ACTIONS['TURN_RIGHT'], 15),    # Turn Right (~30°)
     6: (ACTIONS['TURN_LEFT'], 30),     # Turn Left (~60°)
     7: (ACTIONS['TURN_RIGHT'], 30),    # Turn Right (~60°)
-    8: (ACTIONS['ACCELERATE'], 5),      # Short Burst
-    9: (ACTIONS['ACCELERATE'], 10),     # Long Burst
+    8: (ACTIONS['ACCELERATE'], 1),      # Short Burst
+    9: (ACTIONS['ACCELERATE'], 5),     # Long Burst
 }
 
 # --- AI Hyperparameters ---
