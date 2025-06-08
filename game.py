@@ -199,14 +199,25 @@ def apply_kick_force(hit_info, ball, agents):
     kicker_agent = next((agent for agent in agents if agent.player == kicker), None)
 
     if kicker_agent:
-        # Calculate bonus from player's forward velocity
-        forward_speed = max(0, kicker.velocity.dot(kicker.forward))
+        # The direction of the kick is from the player to the ball.
+        kick_direction = ball.world_position - kicker.world_position
+        kick_direction.y = 0  # Keep the kick direction horizontal.
+
+        # If player and ball are at the same spot, fallback to player's forward direction.
+        if kick_direction.length_squared() == 0:
+            kick_direction = kicker.forward
+        else:
+            kick_direction.normalize()
+
+        # Add power to the kick based on player's velocity in the direction of the kick.
+        velocity_in_kick_direction = kicker.velocity.dot(kick_direction)
+        forward_speed = max(0, velocity_in_kick_direction)
         velocity_bonus = forward_speed * PHYSICS_CONFIG.get('KICK_VELOCITY_BONUS', 0.5)
-        
+
         # Calculate final kick strength
         final_strength = PHYSICS_CONFIG['KICK_STRENGTH'] + velocity_bonus
 
-        ball.velocity = kicker.forward * final_strength + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
+        ball.velocity = kick_direction * final_strength + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
 
 def calculate_rewards(ctx: RewardContext):
     """

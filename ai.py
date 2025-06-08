@@ -54,6 +54,7 @@ class DQNAgent:
         self.max_reward = -float('inf') # Track the highest reward seen
         self.reward_history = deque(maxlen=500) # For calculating average reward
         self.noise_scale = 0.0
+        self.last_loss = 0.0
         
         self.state_size = state_size
         self.action_size = action_size
@@ -123,6 +124,7 @@ class DQNAgent:
 
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+        self.last_loss = loss.item()
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), self.config['GRAD_CLIP'])

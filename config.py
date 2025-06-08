@@ -42,11 +42,11 @@ DQN_CONFIG = {
     # Training
     'BATCH_SIZE': 64,
     'GAMMA': 0.99,       # Discount factor
-    'LR': 5e-4,          # Learning Rate
+    'LR': 1e-4,          # Learning Rate
     'TAU': 0.005,        # Target network soft update rate
     'MEMORY_CAPACITY': 50000,
     'UPDATE_EVERY': 4,              # How often to run the optimization step
-    'TARGET_UPDATE_EVERY': 100,     # How often to soft-update the target network
+    'TARGET_UPDATE_EVERY': 1000,     # How often to soft-update the target network
     'CHECKPOINT_EVERY': 50000,
     'GRAD_CLIP': 100,
     # Parameter Space Noise
@@ -55,9 +55,9 @@ DQN_CONFIG = {
     'NOISE_SCALE_END': 0.01,
     'NOISE_SCALE_DECAY': 100000,
     # Rewards
-    'REWARD_GOAL': 10000,
-    'REWARD_BALL_PROXIMITY_SCALE': 25.0,   # Scales reward for being close to the ball (inversely proportional to distance)
-    'PENALTY_CONCEDE': -200,
+    'REWARD_GOAL': 1,
+    'REWARD_BALL_PROXIMITY_SCALE': 0.01,   # Scales reward for being close to the ball (inversely proportional to distance)
+    'PENALTY_CONCEDE': -1,
 }
 
 # --- Curriculum Learning Config ---
