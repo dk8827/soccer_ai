@@ -37,7 +37,7 @@ ACTIONS = {
 # --- AI Hyperparameters ---
 DQN_CONFIG = {
     # Network and State
-    'HIDDEN_LAYER_SIZE': 64,
+    'HIDDEN_LAYER_SIZE': 128,
     # 'ACTION_SIZE': 3, # This is now len(ACTIONS)
     # Training
     'BATCH_SIZE': 64,
@@ -56,10 +56,7 @@ DQN_CONFIG = {
     'NOISE_SCALE_DECAY': 100000,
     # Rewards
     'REWARD_GOAL': 10000,
-    'REWARD_KICK': 200,
-    'REWARD_KICK_TOWARDS_GOAL': 400,
-    'REWARD_MOVE_TO_BALL_SCALE': 350,
-    'PENALTY_BALL_DISTANCE_SCALE': -1,     # Penalty per unit of distance from the ball
+    'REWARD_BALL_PROXIMITY_SCALE': 25.0,   # Scales reward for being close to the ball (inversely proportional to distance)
     'PENALTY_CONCEDE': -200,
 }
 

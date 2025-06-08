@@ -35,6 +35,7 @@ class GameManager:
     def __init__(self):
         # Game State
         self.score = {'player1': 0, 'player2': 0}
+        self.total_score = {'player1': 0, 'player2': 0}
         self.game_over = False
         self.simulation_running = False
         self.waiting_for_reset = False
@@ -71,7 +72,7 @@ class GameManager:
         self.game_over = False
         self.waiting_for_reset = False
         self.episode_frame_count = 0
-        self.ui_manager.update_score(self.score)
+        self.ui_manager.update_score(self.total_score)
         self.ui_manager.update_timer(self.time_left)
         
         self.entity_manager.reset_episode(self.TOTAL_FRAMES)
@@ -151,7 +152,8 @@ class GameManager:
             if scoring_team:
                 self.waiting_for_reset = True
                 self.score[scoring_team] += 1
-                self.ui_manager.update_score(self.score)
+                self.total_score[scoring_team] += 1
+                self.ui_manager.update_score(self.total_score)
                 
                 # Use a callback to reset the episode after the "Goal!" message
                 def on_goal_anim_complete():

@@ -215,11 +215,14 @@ def calculate_rewards(ctx: RewardContext):
     """
     rewards = {'player1': 0, 'player2': 0}
 
-    # Add a small reward for being near the ball.
+    # Reward for proximity to the ball to encourage staying close.
     for agent in ctx.agents:
         dist_to_ball = distance_xz(agent.player.position, ctx.ball.position)
-        # The reward is inversely proportional to the distance, scaled to be small.
-        rewards[agent.team_name] += 0.1 / (1.0 + dist_to_ball)
+        # Reward for proximity to the ball (inverse relationship).
+        # A small constant is added to the distance to prevent division by zero and
+        # to ensure the reward is high when the agent is very close to the ball.
+        proximity_reward = 1.0 / (dist_to_ball + 0.1)
+        rewards[agent.team_name] += proximity_reward * DQN_CONFIG['REWARD_BALL_PROXIMITY_SCALE']
 
     # Goal check and terminal rewards
     done = False
@@ -234,7 +237,7 @@ def calculate_rewards(ctx: RewardContext):
         scoring_team = 'player1'
     elif goal_scored_by_player2:
         rewards['player2'] += DQN_CONFIG['REWARD_GOAL']
-        rewards['player1'] += DQN_CONFIG['PENALTY_CONCEDE']
+        rewards['player1' ] += DQN_CONFIG['PENALTY_CONCEDE']
         done = True
         scoring_team = 'player2'
         
