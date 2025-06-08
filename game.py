@@ -234,6 +234,20 @@ def calculate_rewards(ctx: RewardContext):
         proximity_reward = 1.0 / (dist_to_ball + 0.1)
         rewards[agent.team_name] += proximity_reward * DQN_CONFIG['REWARD_BALL_PROXIMITY_SCALE']
 
+        # Reward for facing the ball
+        player_forward = agent.player.forward
+        player_forward.y = 0
+        
+        vec_to_ball = ctx.ball.position - agent.player.position
+        vec_to_ball.y = 0
+        
+        # The dot product of two normalized vectors gives the cosine of the angle between them.
+        # A value of 1 means the player is facing the ball directly.
+        # A value of -1 means the player is facing directly away.
+        # We only want to give rewards for looking at the ball, so we clamp at 0.
+        facing_reward = max(0, player_forward.dot(vec_to_ball.normalized()))
+        rewards[agent.team_name] += facing_reward * DQN_CONFIG.get('REWARD_FACING_BALL_SCALE', 0.2)
+
         # Penalty for being stationary
         agent.position_history.append(agent.player.position)
         if len(agent.position_history) == agent.position_history.maxlen:

@@ -70,6 +70,7 @@ DQN_CONFIG = {
     # Rewards
     'REWARD_GOAL': 1,
     'REWARD_BALL_PROXIMITY_SCALE': 1,   # Scales reward for being close to the ball (inversely proportional to distance)
+    'REWARD_FACING_BALL_SCALE': 0.3,    # Scales reward for facing the ball
     'PENALTY_CONCEDE': -0.8,
     'PENALTY_STATIONARY': -1,           # Penalty for not moving over a window of steps
     'STATIONARY_WINDOW': 200,             # Number of steps to check for inactivity
