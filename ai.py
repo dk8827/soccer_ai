@@ -53,6 +53,7 @@ class DQNAgent:
         self.config = config
         self.max_reward = -float('inf') # Track the highest reward seen
         self.reward_history = deque(maxlen=500) # For calculating average reward
+        self.position_history = deque(maxlen=self.config.get('STATIONARY_WINDOW', 200))
         self.noise_scale = 0.0
         self.last_loss = 0.0
         

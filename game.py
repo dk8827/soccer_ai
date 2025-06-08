@@ -235,6 +235,16 @@ def calculate_rewards(ctx: RewardContext):
         proximity_reward = 1.0 / (dist_to_ball + 0.1)
         rewards[agent.team_name] += proximity_reward * DQN_CONFIG['REWARD_BALL_PROXIMITY_SCALE']
 
+        # Penalty for being stationary
+        agent.position_history.append(agent.player.position)
+        if len(agent.position_history) == agent.position_history.maxlen:
+            start_pos = agent.position_history[0]
+            end_pos = agent.position_history[-1]
+            distance_moved = distance_xz(start_pos, end_pos)
+            
+            if distance_moved < DQN_CONFIG.get('STATIONARY_THRESHOLD', 2.0):
+                rewards[agent.team_name] += DQN_CONFIG.get('PENALTY_STATIONARY', -0.5)
+
     # Goal check and terminal rewards
     done = False
     scoring_team = None

@@ -57,6 +57,9 @@ DQN_CONFIG = {
     'REWARD_GOAL': 1,
     'REWARD_BALL_PROXIMITY_SCALE': 1,   # Scales reward for being close to the ball (inversely proportional to distance)
     'PENALTY_CONCEDE': -1,
+    'PENALTY_STATIONARY': -0.5,           # Penalty for not moving over a window of steps
+    'STATIONARY_WINDOW': 200,             # Number of steps to check for inactivity
+    'STATIONARY_THRESHOLD': 2.0,          # Max distance moved in the window to be considered stationary
 }
 
 # --- Curriculum Learning Config ---

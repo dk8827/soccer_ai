@@ -78,6 +78,7 @@ class AgentManager:
         # Apply new noise for the upcoming episode
         for agent in self.agents:
             agent.apply_noise()
+            agent.position_history.clear()
 
     def _get_state_for_agent(self, player, opponent, ball, own_goal, opp_goal):
         """
