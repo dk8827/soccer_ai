@@ -217,7 +217,9 @@ def apply_kick_force(hit_info, ball, agents):
         # Calculate final kick strength
         final_strength = PHYSICS_CONFIG['KICK_STRENGTH'] + velocity_bonus
 
-        ball.velocity = kick_direction * final_strength + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
+        # Accumulate the kick force with the existing velocity
+        kick_force = kick_direction * final_strength + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
+        ball.velocity = (ball.velocity + kick_force) * 0.5  # Average the forces to prevent extreme velocities
 
 def calculate_rewards(ctx: RewardContext):
     """

@@ -133,17 +133,17 @@ class GameManager:
 
         # 2. Handle ball physics and interactions
         ball = self.entity_manager.ball
-        hit_info = ball.intersects(self.entity_manager.players[0]) or ball.intersects(self.entity_manager.players[1])
+        hit_info_p1 = ball.intersects(self.entity_manager.players[0])
+        hit_info_p2 = ball.intersects(self.entity_manager.players[1])
         
-        if hit_info.hit:
+        if hit_info_p1.hit or hit_info_p2.hit:
             self.no_touch_timer = 0 # Reset inactivity timer
             
-            # Find the agent that hit the ball and reset its timer
-            for agent in self.agent_manager.agents:
-                if agent.player == hit_info.entity:
-                    break # Assuming one player hits at a time
-
-            apply_kick_force(hit_info, ball, self.agent_manager.agents)
+            # Handle both collisions if they occur simultaneously
+            if hit_info_p1.hit:
+                apply_kick_force(hit_info_p1, ball, self.agent_manager.agents)
+            if hit_info_p2.hit:
+                apply_kick_force(hit_info_p2, ball, self.agent_manager.agents)
 
         # 3. Calculate rewards
         ctx = RewardContext(
@@ -151,7 +151,7 @@ class GameManager:
             ball=ball,
             player1_goal=self.entity_manager.player1_goal,
             player2_goal=self.entity_manager.player2_goal,
-            hit_info=hit_info,
+            hit_info=hit_info_p1 if hit_info_p1.hit else hit_info_p2,
         )
         rewards, done, scoring_team = calculate_rewards(ctx)
 
