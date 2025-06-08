@@ -72,7 +72,7 @@ class GameManager:
         self.ui_manager.update_score(self.score)
         self.ui_manager.update_timer(self.time_left)
         
-        self.entity_manager.reset_episode()
+        self.entity_manager.reset_episode(self.TOTAL_FRAMES)
         self.agent_manager.reset_episode()
 
         if GAME_CONFIG['SHOULD_RENDER'] and sys.platform == 'darwin':
@@ -152,7 +152,7 @@ class GameManager:
             if scoring_team:
                 self.score[scoring_team] += 1
             self.ui_manager.update_score(self.score)
-            self.entity_manager.reset_episode()
+            self.entity_manager.reset_episode(self.TOTAL_FRAMES)
             self.agent_manager.reset_episode()
             self.episode_frame_count = 0
 

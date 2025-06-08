@@ -1,5 +1,5 @@
-from ursina import Vec3, color
-from config import GAME_CONFIG, DQN_CONFIG, ACTIONS, PHYSICS_CONFIG
+from ursina import Vec3, color, lerp
+from config import GAME_CONFIG, DQN_CONFIG, ACTIONS, PHYSICS_CONFIG, CURRICULUM_CONFIG
 from ai import DQNAgent, device
 from game import Player, Ball
 import torch
@@ -28,10 +28,21 @@ class EntityManager:
         ]
         self.opponents = [self.players[1], self.players[0]]
 
-    def reset_episode(self):
+    def reset_episode(self, total_frames=0):
         """Resets all entities to their starting positions for a new episode."""
-        max_z = GAME_CONFIG['FIELD_LENGTH'] / 2.5 # Give some margin from the walls
-        random_z = random.uniform(-max_z, max_z)
+        if CURRICULUM_CONFIG.get('ENABLED', False):
+            max_z_end = GAME_CONFIG['FIELD_LENGTH'] / CURRICULUM_CONFIG['BALL_Z_RANGE_END_FACTOR']
+            
+            schedule_frames = CURRICULUM_CONFIG['SCHEDULE_FRAMES']
+            progress = 1.0
+            if schedule_frames > 0:
+                progress = min(1.0, total_frames / schedule_frames)
+
+            current_max_z = lerp(CURRICULUM_CONFIG['BALL_Z_RANGE_START'], max_z_end, progress)
+        else:
+            current_max_z = GAME_CONFIG['FIELD_LENGTH'] / 2.5 # Give some margin from the walls
+
+        random_z = random.uniform(-current_max_z, current_max_z)
         self.ball.reset(position=Vec3(0, 0, random_z))
         self.players[0].reset(position=Vec3(-15, 0, 0), rotation_y=90)
         self.players[1].reset(position=Vec3(15, 0, 0), rotation_y=-90)

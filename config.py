@@ -6,7 +6,7 @@ GAME_CONFIG = {
     'GOAL_WIDTH': 20,
     'WALL_HEIGHT': 12,
     'GAME_TIMER_SECONDS': 40,
-    'NO_TOUCH_TIMEOUT': 20,
+    'NO_TOUCH_TIMEOUT': 10,
     'NUM_GAMES_TO_RUN': 2000,
     'SAVE_DIR': "models",
 }
@@ -56,10 +56,17 @@ DQN_CONFIG = {
     'NOISE_SCALE_DECAY': 100000,
     # Rewards
     'REWARD_GOAL': 10000,
-    'REWARD_KICK': 100,
-    'REWARD_KICK_TOWARDS_GOAL': 300,
-    'REWARD_MOVE_TO_BALL_SCALE': 20,
-    'REWARD_DEFENSIVE_POS': 0.1,
+    'REWARD_KICK': 200,
+    'REWARD_KICK_TOWARDS_GOAL': 400,
+    'REWARD_MOVE_TO_BALL_SCALE': 350,
     'PENALTY_BALL_DISTANCE_SCALE': -1,     # Penalty per unit of distance from the ball
-    'PENALTY_CONCEDE': -100,
+    'PENALTY_CONCEDE': -200,
+}
+
+# --- Curriculum Learning Config ---
+CURRICULUM_CONFIG = {
+    'ENABLED': True,
+    'BALL_Z_RANGE_START': 0.1, # Start with a very small random z range
+    'BALL_Z_RANGE_END_FACTOR': 2.5, # FIELD_LENGTH / THIS_VALUE = max z offset
+    'SCHEDULE_FRAMES': 500000, # Number of frames to reach the full range
 } 
