@@ -68,8 +68,10 @@ class DQNAgent:
         self.policy_net = DQN(self.state_size, self.action_size, hidden_layer_size).to(device)
         self.target_net = DQN(self.state_size, self.action_size, hidden_layer_size).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()
         self.perturbed_net = DQN(self.state_size, self.action_size, hidden_layer_size).to(device)
         self.perturbed_net.load_state_dict(self.policy_net.state_dict())
+        self.perturbed_net.eval()
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.config['LR'], amsgrad=True)
 
     @property
@@ -121,7 +123,9 @@ class DQNAgent:
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
         next_state_values = torch.zeros(self.config['BATCH_SIZE'], device=device)
         with torch.no_grad():
+            self.policy_net.eval() # Disable dropout for this part
             next_state_actions = self.policy_net(non_final_next_states).max(1)[1].unsqueeze(1)
+            self.policy_net.train() # Re-enable dropout
             next_state_values[non_final_mask] = self.target_net(non_final_next_states).gather(1, next_state_actions).squeeze(1)
 
         # Compute the expected Q values, now accounting for macro-action duration
@@ -159,6 +163,7 @@ class DQNAgent:
                 self.policy_net.load_state_dict(torch.load(path, map_location=device))
                 self.target_net.load_state_dict(self.policy_net.state_dict())
                 self.policy_net.eval() # Set model to evaluation mode after loading
+                self.target_net.eval()
             except RuntimeError as e:
                 print(f"Could not load model for {self.team_name} due to architecture mismatch. Starting fresh.")
                 print(f"Error: {e}")
