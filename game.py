@@ -8,7 +8,7 @@ from config import GAME_CONFIG, PHYSICS_CONFIG, DQN_CONFIG, ACTIONS
 
 RewardContext = namedtuple('RewardContext', [
     'agents', 'ball', 'player1_goal', 'player2_goal', 
-    'hit_info', 'prev_ball_dists', 'last_dists_to_ball'
+    'hit_info'
 ])
 
 def distance_xz(pos1, pos2):
@@ -208,66 +208,20 @@ def apply_kick_force(hit_info, ball, agents):
 
         ball.velocity = kicker.forward * final_strength + Vec3(0, PHYSICS_CONFIG['KICK_LIFT'], 0)
 
-def _calculate_kick_rewards(hit_info, ball, agents, prev_ball_dist_to_opp_goals):
-    """Calculates rewards for kicking the ball."""
-    kick_rewards = {agent.team_name: 0 for agent in agents}
-    kicker = hit_info.entity
-    kicker_agent = next((agent for agent in agents if agent.player == kicker), None)
-
-    if kicker_agent:
-        kick_rewards[kicker_agent.team_name] += DQN_CONFIG['REWARD_KICK']
-        # Reward for kicking towards opponent's goal
-        current_dist_to_goal = distance_xz(ball.position, kicker_agent.opp_goal.position)
-        if current_dist_to_goal < prev_ball_dist_to_opp_goals.get(kicker_agent.team_name, float('inf')):
-            kick_rewards[kicker_agent.team_name] += DQN_CONFIG['REWARD_KICK_TOWARDS_GOAL']
-    
-    return kick_rewards
-
-def _calculate_proximity_reward(player_position, ball_position, last_dist_to_ball):
-    """Calculates reward for moving towards the ball."""
-    reward = 0
-    current_dist_to_ball = distance_xz(player_position, ball_position)
-    if last_dist_to_ball is not None:
-        reward += (last_dist_to_ball - current_dist_to_ball) * DQN_CONFIG['REWARD_MOVE_TO_BALL_SCALE']
-    return reward, current_dist_to_ball
-
 def calculate_rewards(ctx: RewardContext):
     """
     Calculates all rewards for the current game state and checks for terminal conditions.
     This is the single source of truth for rewards.
     """
-    rewards = {}
-    new_dists_to_ball = {}
+    rewards = {'player1': 0, 'player2': 0}
 
+    # Add a small reward for being near the ball.
     for agent in ctx.agents:
-        team = agent.team_name
-        player = agent.player
-        opp_goal = agent.opp_goal
-        
-        # Initialize reward for this agent
-        rewards[team] = 0
+        dist_to_ball = distance_xz(agent.player.position, ctx.ball.position)
+        # The reward is inversely proportional to the distance, scaled to be small.
+        rewards[agent.team_name] += 0.1 / (1.0 + dist_to_ball)
 
-        # --- Penalties (applied first) ---
-        
-        # Calculate proximity reward and create a new distance tracking dict
-        prox_reward, new_dist = _calculate_proximity_reward(
-            player.position, 
-            ctx.ball.position, 
-            ctx.last_dists_to_ball[team]
-        )
-        rewards[team] += prox_reward
-        new_dists_to_ball[team] = new_dist
-        
-        # Penalize distance from the ball
-        rewards[team] += new_dist * DQN_CONFIG['PENALTY_BALL_DISTANCE_SCALE']
-
-    # 2. Kick rewards
-    if ctx.hit_info and ctx.hit_info.hit:
-        kick_rewards = _calculate_kick_rewards(ctx.hit_info, ctx.ball, ctx.agents, ctx.prev_ball_dists)
-        for team_name, reward in kick_rewards.items():
-            rewards[team_name] += reward
-            
-    # 3. Goal check and terminal rewards
+    # Goal check and terminal rewards
     done = False
     scoring_team = None
     goal_scored_by_player1 = ctx.ball.intersects(ctx.player2_goal.trigger).hit
@@ -284,4 +238,4 @@ def calculate_rewards(ctx: RewardContext):
         done = True
         scoring_team = 'player2'
         
-    return rewards, done, scoring_team, new_dists_to_ball 
+    return rewards, done, scoring_team 

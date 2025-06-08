@@ -117,7 +117,6 @@ class GameManager:
 
         # 2. Handle ball physics and interactions
         ball = self.entity_manager.ball
-        prev_ball_dists = {a.team_name: distance_xz(ball.position, a.opp_goal.position) for a in self.agent_manager.agents}
         hit_info = ball.intersects(self.entity_manager.players[0]) or ball.intersects(self.entity_manager.players[1])
         
         if hit_info.hit:
@@ -137,11 +136,8 @@ class GameManager:
             player1_goal=self.entity_manager.player1_goal,
             player2_goal=self.entity_manager.player2_goal,
             hit_info=hit_info,
-            prev_ball_dists=prev_ball_dists,
-            last_dists_to_ball=self.agent_manager.last_dists_to_ball
         )
-        rewards, done, scoring_team, new_dists_to_ball = calculate_rewards(ctx)
-        self.agent_manager.last_dists_to_ball = new_dists_to_ball
+        rewards, done, scoring_team = calculate_rewards(ctx)
 
         # 4. Update AI learning
         self.TOTAL_FRAMES += 1

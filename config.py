@@ -45,7 +45,7 @@ DQN_CONFIG = {
     'LR': 5e-4,          # Learning Rate
     'TAU': 0.005,        # Target network soft update rate
     'MEMORY_CAPACITY': 50000,
-    'UPDATE_EVERY': 1,              # How often to run the optimization step
+    'UPDATE_EVERY': 4,              # How often to run the optimization step
     'TARGET_UPDATE_EVERY': 100,     # How often to soft-update the target network
     'CHECKPOINT_EVERY': 50000,
     'GRAD_CLIP': 100,

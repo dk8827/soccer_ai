@@ -52,7 +52,6 @@ class AgentManager:
     def __init__(self, entity_manager, player1_goal, player2_goal):
         self.entity_manager = entity_manager
         self.agents = []
-        self.last_dists_to_ball = {}
 
         goal_assignments = [(player1_goal, player2_goal), (player2_goal, player1_goal)]
         team_names = ['player1', 'player2']
@@ -76,7 +75,6 @@ class AgentManager:
 
     def reset_episode(self):
         """Resets the state for the agents for a new episode."""
-        self.last_dists_to_ball = {agent.team_name: None for agent in self.agents}
         # Apply new noise for the upcoming episode
         for agent in self.agents:
             agent.apply_noise()
