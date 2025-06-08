@@ -7,7 +7,6 @@ class UIManager:
         if not GAME_CONFIG['SHOULD_RENDER']:
             self.score_display = None
             self.timer_display = None
-            self.no_touch_timer_display = None
             self.p1_max_reward_display = None
             self.p2_max_reward_display = None
             self.p1_avg_reward_display = None
@@ -31,15 +30,6 @@ class UIManager:
             y=0.36, 
             scale=1.4, 
             color=color.yellow,
-            background=False
-        )
-        
-        self.no_touch_timer_display = Text(
-            "00", 
-            origin=(0,0), 
-            y=0.3, 
-            scale=1.1, 
-            color=color.orange,
             background=False
         )
         
@@ -109,10 +99,6 @@ class UIManager:
         mins, secs = divmod(time_left, 60)
         self.timer_display.text = f"Time: {int(mins):02}:{int(secs):02}"
 
-    def update_no_touch_timer(self, time_left):
-        if not self.no_touch_timer_display: return
-        self.no_touch_timer_display.text = f"No Touch: {int(time_left):02}"
-
     def update_reward_displays(self, agents):
         if not self.p1_max_reward_display: return # Assume others are also None
         self.p1_max_reward_display.text = f"P1 Max Reward: {agents[0].max_reward:.4f}"
@@ -134,8 +120,6 @@ class UIManager:
             destroy(self.score_display)
         if self.timer_display:
             destroy(self.timer_display)
-        if self.no_touch_timer_display:
-            destroy(self.no_touch_timer_display)
         if self.p1_max_reward_display:
             destroy(self.p1_max_reward_display)
         if self.p2_max_reward_display:

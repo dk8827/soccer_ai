@@ -48,7 +48,6 @@ class GameManager:
         self.simulation_running = False
         self.waiting_for_reset = False
         self.time_left = GAME_CONFIG['GAME_TIMER_SECONDS']
-        self.no_touch_timer = 0
         self.game_number = 0
         self.episode_frame_count = 0
         self.TOTAL_FRAMES = 0
@@ -82,7 +81,6 @@ class GameManager:
         print(f"--- Starting Game {self.game_number + 1}/{GAME_CONFIG['NUM_GAMES_TO_RUN']} ---")
         self.score = {'player1': 0, 'player2': 0}
         self.time_left = GAME_CONFIG['GAME_TIMER_SECONDS']
-        self.no_touch_timer = 0
         self.game_over = False
         self.waiting_for_reset = False
         self.episode_frame_count = 0
@@ -130,7 +128,6 @@ class GameManager:
         total_kick_force = Vec3(0,0,0)
 
         if hit_info_p1.hit or hit_info_p2.hit:
-            self.no_touch_timer = 0 # Reset inactivity timer
             
             if hit_info_p1.hit:
                 total_kick_force += calculate_kick_force(hit_info_p1, ball)
@@ -155,8 +152,7 @@ class GameManager:
 
         # 4. Check for episode/game end via timers
         self._update_timer(dt)
-        self.no_touch_timer += dt
-        timeout_done = self.time_left <= 0 or self.no_touch_timer > GAME_CONFIG['NO_TOUCH_TIMEOUT']
+        timeout_done = self.time_left <= 0
         episode_is_done = done or timeout_done
 
         # 5. Update AI learning
@@ -171,8 +167,6 @@ class GameManager:
             self.game_over = True
             if self.time_left <= 0:
                 print("--- Game ended due to time limit. ---")
-            else: # Inactivity
-                print("--- Game ended due to inactivity. ---")
             return # Exit this frame's update to prevent goal logic from running
 
         if done: # This 'done' only comes from a goal now
@@ -199,7 +193,6 @@ class GameManager:
             self.time_left = 0
             # self.game_over is now set in the main update loop to ensure correct learning state
         self.ui_manager.update_timer(self.time_left)
-        self.ui_manager.update_no_touch_timer(self.no_touch_timer)
 
 
     def _log_and_plot_progress(self):
