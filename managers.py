@@ -109,9 +109,11 @@ class AgentManager:
         # 3. Handle velocities (which are direction vectors)
         ball_vel_world = ball.velocity / PHYSICS_CONFIG['KICK_STRENGTH']
         p_vel_world = player.velocity / max_speed if max_speed > 0 else Vec3(0, 0, 0)
+        opp_vel_world = opponent.velocity / max_speed if max_speed > 0 else Vec3(0, 0, 0)
         
         ball_vel = rotate_vector(ball_vel_world, player_angle_rad)
         p_vel = rotate_vector(p_vel_world, player_angle_rad)
+        opp_vel = rotate_vector(opp_vel_world, player_angle_rad)
 
         # In the player's reference frame, their own forward vector is always (0, 0, 1),
         # and angles to objects are implicitly captured by the rotated vectors.
@@ -124,6 +126,7 @@ class AgentManager:
             vec_to_own_goal.x, vec_to_own_goal.z,
             vec_to_opponent.x, vec_to_opponent.z,
             p_vel.x, p_vel.z,
+            opp_vel.x, opp_vel.z,
         ]
         return state
 
