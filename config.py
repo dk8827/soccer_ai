@@ -69,7 +69,7 @@ DQN_CONFIG = {
     'NOISE_SCALE_DECAY': 100000,
     # Rewards
     'REWARD_GOAL': 10,
-    'REWARD_KICK': 0.1,                   # Small reward for making contact with the ball
+    'REWARD_KICK': 0.5,                   #  Reward for making contact with the ball
     'REWARD_BALL_PROXIMITY_SCALE': 0.03,   # Scales reward for being close to the ball (inversely proportional to distance)
     'REWARD_FACING_BALL_SCALE': 0.05,    # Scales reward for facing the ball
     'PENALTY_CONCEDE': -10,
