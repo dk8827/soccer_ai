@@ -27,25 +27,71 @@ class EntityManager:
             Player(position=(15, 0, 0), color=color.blue, rotation_y=-90, ground=self.ground)
         ]
         self.opponents = [self.players[1], self.players[0]]
+        self.ball_start_player_index = 0
 
     def reset_episode(self, total_frames=0):
-        """Resets all entities to their starting positions for a new episode."""
-        if CURRICULUM_CONFIG.get('ENABLED', False):
-            max_z_end = GAME_CONFIG['FIELD_LENGTH'] / CURRICULUM_CONFIG['BALL_Z_RANGE_END_FACTOR']
-            
-            schedule_frames = CURRICULUM_CONFIG['SCHEDULE_FRAMES']
-            progress = 1.0
-            if schedule_frames > 0:
-                progress = min(1.0, total_frames / schedule_frames)
+        """
+        Resets all entities to their starting positions for a new episode.
+        Implements curriculum learning to transition from a player starting with the ball
+        to a standard, neutral kickoff.
+        """
+        if not CURRICULUM_CONFIG.get('ENABLED', False):
+            # Fallback to a simple random reset if curriculum is disabled
+            current_max_z = GAME_CONFIG['FIELD_LENGTH'] / 2.5
+            random_z = random.uniform(-current_max_z, current_max_z)
+            self.ball.reset(position=Vec3(0, 0, random_z))
+            self.players[0].reset(position=Vec3(-15, 0, 0), rotation_y=90)
+            self.players[1].reset(position=Vec3(15, 0, 0), rotation_y=-90)
+            return
 
-            current_max_z = lerp(CURRICULUM_CONFIG['BALL_Z_RANGE_START'], max_z_end, progress)
-        else:
-            current_max_z = GAME_CONFIG['FIELD_LENGTH'] / 2.5 # Give some margin from the walls
+        # --- CURRICULUM LEARNING LOGIC ---
+        schedule_frames = CURRICULUM_CONFIG.get('SCHEDULE_FRAMES', 500000)
+        progress = min(1.0, total_frames / schedule_frames) if schedule_frames > 0 else 1.0
 
-        random_z = random.uniform(-current_max_z, current_max_z)
-        self.ball.reset(position=Vec3(0, 0, random_z))
-        self.players[0].reset(position=Vec3(-15, 0, 0), rotation_y=90)
-        self.players[1].reset(position=Vec3(15, 0, 0), rotation_y=-90)
+        # --- Stage 0: Player starts with the ball (at progress = 0) ---
+        player_with_ball_idx = self.ball_start_player_index
+        p_without_ball_idx = 1 - player_with_ball_idx
+
+        field_w_half = GAME_CONFIG['FIELD_WIDTH'] / 2
+        field_l_half = GAME_CONFIG['FIELD_LENGTH'] / 2
+
+        # Position for player starting with the ball (in their own half)
+        p_with_ball_x = random.uniform(-field_w_half * 0.8, -2) if player_with_ball_idx == 0 else random.uniform(2, field_w_half * 0.8)
+        p_with_ball_z = random.uniform(-field_l_half * 0.8, field_l_half * 0.8)
+        p_with_ball_pos_start = Vec3(p_with_ball_x, 0, p_with_ball_z)
+
+        # Ball is placed between player and opponent goal
+        ball_offset = Vec3(2.0, 0, 0) if player_with_ball_idx == 0 else Vec3(-2.0, 0, 0)
+        ball_pos_start = p_with_ball_pos_start + ball_offset
+
+        # Position for player without the ball (in their own half)
+        p_without_ball_x = random.uniform(2, field_w_half * 0.8) if p_without_ball_idx == 1 else random.uniform(-field_w_half * 0.8, -2)
+        p_without_ball_z = random.uniform(-field_l_half * 0.8, field_l_half * 0.8)
+        p_without_ball_pos_start = Vec3(p_without_ball_x, 0, p_without_ball_z)
+        
+        # Assign starting positions based on who has the ball
+        p1_pos_start = p_with_ball_pos_start if player_with_ball_idx == 0 else p_without_ball_pos_start
+        p2_pos_start = p_without_ball_pos_start if player_with_ball_idx == 0 else p_with_ball_pos_start
+
+        # --- Stage 1: Standard kickoff (at progress = 1) ---
+        max_z_end = GAME_CONFIG['FIELD_LENGTH'] / CURRICULUM_CONFIG.get('BALL_Z_RANGE_END_FACTOR', 2.5)
+        random_z_end = random.uniform(-max_z_end, max_z_end)
+
+        ball_pos_end = Vec3(0, 0, random_z_end)
+        p1_pos_end = Vec3(-15, 0, 0)
+        p2_pos_end = Vec3(15, 0, 0)
+
+        # --- Interpolate between stages based on progress ---
+        final_ball_pos = lerp(ball_pos_start, ball_pos_end, progress)
+        final_p1_pos = lerp(p1_pos_start, p1_pos_end, progress)
+        final_p2_pos = lerp(p2_pos_start, p2_pos_end, progress)
+
+        self.ball.reset(position=final_ball_pos)
+        self.players[0].reset(position=final_p1_pos, rotation_y=90)
+        self.players[1].reset(position=final_p2_pos, rotation_y=-90)
+
+        # Alternate which player starts with the ball for the next episode
+        self.ball_start_player_index = 1 - self.ball_start_player_index
 
 class AgentManager:
     """Manages the AI agents, including their creation, actions, and learning."""
