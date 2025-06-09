@@ -116,7 +116,7 @@ class GameManager:
         if dt == 0: return
 
         # 1. Get AI actions and move players
-        states, primitive_actions = self.agent_manager.get_primitive_actions_and_states()
+        states, primitive_actions = self.agent_manager.get_primitive_actions_and_states(self.time_left)
         for i, action in enumerate(primitive_actions):
             move_player(self.entity_manager.players[i], action)
         handle_player_collisions(self.entity_manager.players[0], self.entity_manager.players[1])

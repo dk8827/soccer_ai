@@ -258,6 +258,14 @@ def calculate_rewards(ctx: RewardContext):
             if distance_moved < DQN_CONFIG.get('STATIONARY_THRESHOLD', 2.0):
                 rewards[agent.team_name] += DQN_CONFIG.get('PENALTY_STATIONARY', -0.5)
 
+    # Reward for kicking the ball
+    if ctx.hit_info.hit:
+        kicker = ctx.hit_info.entity
+        for agent in ctx.agents:
+            if agent.player == kicker:
+                rewards[agent.team_name] += DQN_CONFIG.get('REWARD_KICK', 0.1)
+                break
+
     # Goal check and terminal rewards
     done = False
     scoring_team = None

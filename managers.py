@@ -106,7 +106,8 @@ class AgentManager:
         # Determine state and action sizes from a sample
         sample_state = self._get_state_for_agent(
             self.entity_manager.players[0], self.entity_manager.opponents[0],
-            self.entity_manager.ball, goal_assignments[0][0], goal_assignments[0][1]
+            self.entity_manager.ball, goal_assignments[0][0], goal_assignments[0][1],
+            GAME_CONFIG['GAME_TIMER_SECONDS']
         )
         state_size = len(sample_state)
         action_size = len(MACRO_ACTIONS) # Use the number of MACRO actions
@@ -186,7 +187,7 @@ class AgentManager:
 
         return normalized_dist
 
-    def _get_state_for_agent(self, player, opponent, ball, own_goal, opp_goal):
+    def _get_state_for_agent(self, player, opponent, ball, own_goal, opp_goal, time_left):
         """
         Constructs a player-centric state vector for a given agent.
         All vectors are rotated relative to the player's orientation.
@@ -225,6 +226,9 @@ class AgentManager:
         # 4. Calculate wall distance
         wall_dist = self._get_wall_distance(player)
         
+        # 5. Normalize time left
+        normalized_time = time_left / GAME_CONFIG['GAME_TIMER_SECONDS']
+        
         state = [
             vec_to_ball.x, vec_to_ball.z,
             ball_vel.x, ball_vel.z,
@@ -234,10 +238,11 @@ class AgentManager:
             p_vel.x, p_vel.z,
             opp_vel.x, opp_vel.z,
             wall_dist,  # Add wall distance to state
+            normalized_time,
         ]
         return state
 
-    def get_primitive_actions_and_states(self):
+    def get_primitive_actions_and_states(self, time_left):
         """
         Decides on an action for each agent. If a macro is in progress, it continues it.
         If not, it selects a new macro action.
@@ -255,7 +260,8 @@ class AgentManager:
                 if tracker['last_state'] is not None:
                     next_state = self._get_state_for_agent(
                         agent.player, self.entity_manager.opponents[i], self.entity_manager.ball,
-                        agent.own_goal, agent.opp_goal
+                        agent.own_goal, agent.opp_goal,
+                        time_left
                     )
                     next_state_tensor = torch.tensor(next_state, dtype=torch.float32, device=device).unsqueeze(0)
                     
@@ -268,7 +274,8 @@ class AgentManager:
                 agent.apply_noise()
                 current_state = self._get_state_for_agent(
                     agent.player, self.entity_manager.opponents[i], self.entity_manager.ball,
-                    agent.own_goal, agent.opp_goal
+                    agent.own_goal, agent.opp_goal,
+                    time_left
                 )
                 current_state_tensor = torch.tensor(current_state, dtype=torch.float32, device=device).unsqueeze(0)
                 

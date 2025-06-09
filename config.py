@@ -17,7 +17,7 @@ PHYSICS_CONFIG = {
     'PLAYER_FRICTION': 1.5,
     'PLAYER_TURN_SPEED': 250,
     'KICK_STRENGTH': 10,
-    'KICK_VELOCITY_BONUS': 0.4, # Multiplier for player's forward speed on kick
+    'KICK_VELOCITY_BONUS': 0.5, # Multiplier for player's forward speed on kick
     'KICK_LIFT': 6,
     'BALL_BOUNCINESS': 0.6,
     'BALL_WALL_BOUNCINESS': 0.9,
@@ -69,8 +69,9 @@ DQN_CONFIG = {
     'NOISE_SCALE_DECAY': 100000,
     # Rewards
     'REWARD_GOAL': 10,
-    'REWARD_BALL_PROXIMITY_SCALE': 0.05,   # Scales reward for being close to the ball (inversely proportional to distance)
-    'REWARD_FACING_BALL_SCALE': 0.1,    # Scales reward for facing the ball
+    'REWARD_KICK': 0.1,                   # Small reward for making contact with the ball
+    'REWARD_BALL_PROXIMITY_SCALE': 0.03,   # Scales reward for being close to the ball (inversely proportional to distance)
+    'REWARD_FACING_BALL_SCALE': 0.05,    # Scales reward for facing the ball
     'PENALTY_CONCEDE': -10,
     'PENALTY_STATIONARY': -0.1,           # Penalty for not moving over a window of steps
     'STATIONARY_WINDOW': 200,             # Number of steps to check for inactivity
