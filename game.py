@@ -8,7 +8,7 @@ from config import GAME_CONFIG, PHYSICS_CONFIG, DQN_CONFIG, ACTIONS
 
 RewardContext = namedtuple('RewardContext', [
     'agents', 'ball', 'player1_goal', 'player2_goal', 
-    'hit_info'
+    'hit_info', 'last_kicker'
 ])
 
 def distance_xz(pos1, pos2):
@@ -269,18 +269,27 @@ def calculate_rewards(ctx: RewardContext):
     # Goal check and terminal rewards
     done = False
     scoring_team = None
-    goal_scored_by_player1 = ctx.ball.intersects(ctx.player2_goal.trigger).hit
-    goal_scored_by_player2 = ctx.ball.intersects(ctx.player1_goal.trigger).hit
+    goal_scored_by_player1 = ctx.ball.intersects(ctx.player2_goal.trigger).hit # Player 1 scores in Player 2's goal
+    goal_scored_by_player2 = ctx.ball.intersects(ctx.player1_goal.trigger).hit # Player 2 scores in Player 1's goal
 
     if goal_scored_by_player1:
-        rewards['player1'] += DQN_CONFIG['REWARD_GOAL']
-        rewards['player2'] += DQN_CONFIG['PENALTY_CONCEDE']
-        done = True
         scoring_team = 'player1'
-    elif goal_scored_by_player2:
-        rewards['player2'] += DQN_CONFIG['REWARD_GOAL']
-        rewards['player1' ] += DQN_CONFIG['PENALTY_CONCEDE']
         done = True
+        rewards['player1'] += DQN_CONFIG['REWARD_GOAL']
+        # Check for own goal by Player 2
+        if ctx.last_kicker == ctx.agents[1].player:
+            rewards['player2'] += DQN_CONFIG.get('PENALTY_SELF_GOAL', -15)
+        else:
+            rewards['player2'] += DQN_CONFIG['PENALTY_CONCEDE']
+
+    elif goal_scored_by_player2:
         scoring_team = 'player2'
+        done = True
+        rewards['player2'] += DQN_CONFIG['REWARD_GOAL']
+        # Check for own goal by Player 1
+        if ctx.last_kicker == ctx.agents[0].player:
+            rewards['player1'] += DQN_CONFIG.get('PENALTY_SELF_GOAL', -15)
+        else:
+            rewards['player1'] += DQN_CONFIG['PENALTY_CONCEDE']
         
     return rewards, done, scoring_team 

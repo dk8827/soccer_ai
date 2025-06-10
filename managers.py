@@ -28,6 +28,7 @@ class EntityManager:
         ]
         self.opponents = [self.players[1], self.players[0]]
         self.ball_start_player_index = 0
+        self.last_kicker = None
 
     def reset_episode(self, total_frames=0):
         """
@@ -35,6 +36,7 @@ class EntityManager:
         Implements curriculum learning to transition from a player starting with the ball
         to a standard, neutral kickoff.
         """
+        self.last_kicker = None
         if not CURRICULUM_CONFIG.get('ENABLED', False):
             # Fallback to a simple random reset if curriculum is disabled
             current_max_z = GAME_CONFIG['FIELD_LENGTH'] / 2.5

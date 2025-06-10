@@ -73,6 +73,7 @@ DQN_CONFIG = {
     'REWARD_BALL_PROXIMITY_SCALE': 0.03,   # Scales reward for being close to the ball (inversely proportional to distance)
     'REWARD_FACING_BALL_SCALE': 0.05,    # Scales reward for facing the ball
     'PENALTY_CONCEDE': -10,
+    'PENALTY_SELF_GOAL': -15,             # Harsher penalty for scoring on oneself
     'PENALTY_STATIONARY': -0.1,           # Penalty for not moving over a window of steps
     'STATIONARY_WINDOW': 200,             # Number of steps to check for inactivity
     'STATIONARY_THRESHOLD': 2.0,          # Max distance moved in the window to be considered stationary

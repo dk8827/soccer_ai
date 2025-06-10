@@ -4,6 +4,7 @@ import time as a_different_time # Use a different alias to avoid conflict with u
 import os
 import numpy as np
 from datetime import datetime
+import random
 
 try:
     import matplotlib.pyplot as plt
@@ -126,6 +127,14 @@ class GameManager:
         hit_info_p1 = ball.intersects(self.entity_manager.players[0])
         hit_info_p2 = ball.intersects(self.entity_manager.players[1])
         
+        # Determine last kicker
+        if hit_info_p1.hit and hit_info_p2.hit:
+            self.entity_manager.last_kicker = random.choice(self.entity_manager.players)
+        elif hit_info_p1.hit:
+            self.entity_manager.last_kicker = self.entity_manager.players[0]
+        elif hit_info_p2.hit:
+            self.entity_manager.last_kicker = self.entity_manager.players[1]
+        
         kicker_count = 0
         total_kick_force = Vec3(0,0,0)
 
@@ -149,6 +158,7 @@ class GameManager:
             player1_goal=self.entity_manager.player1_goal,
             player2_goal=self.entity_manager.player2_goal,
             hit_info=hit_info_p1 if hit_info_p1.hit else hit_info_p2,
+            last_kicker=self.entity_manager.last_kicker,
         )
         rewards, done, scoring_team = calculate_rewards(ctx)
 
