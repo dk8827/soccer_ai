@@ -65,7 +65,7 @@ DQN_CONFIG = {
     # Parameter Space Noise
     'NOISE_ENABLED': True,
     'NOISE_SCALE_START': 0.05,
-    'NOISE_SCALE_END': 0.01,
+    'NOISE_SCALE_END': 0.0001,
     'NOISE_SCALE_DECAY': 100000,
     # Rewards
     'REWARD_GOAL': 10,
