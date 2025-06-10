@@ -94,7 +94,13 @@ class GameManager:
         self.agent_manager.reset_episode()
 
         if GAME_CONFIG['SHOULD_RENDER'] and sys.platform == 'darwin':
-            window.size += (0, 1); window.size -= (0, 1)
+            # This is a workaround for a graphics refresh bug on macOS.
+            # The original implementation `window.size += (0, 1); window.size -= (0, 1)`
+            # could cause the window to shrink over time due to rounding errors.
+            # This revised implementation is more robust.
+            original_size = window.size
+            window.size = (original_size.x, original_size.y + 1)
+            window.size = original_size
 
 
     def update(self):
