@@ -37,6 +37,36 @@ window.fps_counter.enabled = True
 camera.position = (0, 55, -55); camera.rotation = (45, 0, 0)
 
 
+def apply_macos_rendering_workaround():
+    """
+    On macOS, Ursina can have issues with UI elements not rendering correctly
+    until the window is resized. This function forces a redraw to fix it.
+    We introduce a small delay before reverting the size to give the OS
+    time to process the change.
+    """
+    # This check is important to avoid running graphics-related code in headless mode
+    if not GAME_CONFIG['SHOULD_RENDER'] or sys.platform != 'darwin':
+        return
+
+    original_size = window.size
+    # Slightly change the size
+    window.size = (original_size.x, original_size.y + 1)
+
+    # Schedule a function to restore the size after a very short delay.
+    # This gives the window manager time to process the resize event.
+    def restore_size():
+        window.size = original_size
+        if hasattr(window, 'update_aspect_ratio'):
+            try:
+                window.update_aspect_ratio()
+            except Exception:
+                pass
+        # Call once more a few frames later, just in case the first one was too early.
+        invoke(lambda: hasattr(window, 'update_aspect_ratio') and window.update_aspect_ratio(), delay=0.05)
+
+    invoke(restore_size, delay=0.01)
+
+
 class GameManager:
     """
     Manages the overall game flow, state, and coordination between
@@ -93,14 +123,7 @@ class GameManager:
         self.entity_manager.reset_episode(self.TOTAL_FRAMES)
         self.agent_manager.reset_episode()
 
-        if GAME_CONFIG['SHOULD_RENDER'] and sys.platform == 'darwin':
-            # This is a workaround for a graphics refresh bug on macOS.
-            # The original implementation `window.size += (0, 1); window.size -= (0, 1)`
-            # could cause the window to shrink over time due to rounding errors.
-            # This revised implementation is more robust.
-            original_size = window.size
-            window.size = (original_size.x, original_size.y + 1)
-            window.size = original_size
+        apply_macos_rendering_workaround()
 
 
     def update(self):
@@ -344,6 +367,9 @@ def input(key):
 if __name__ == '__main__':
     game_manager = GameManager()
     if GAME_CONFIG['SHOULD_RENDER']:
+        # This workaround needs to be called after the window is created but
+        # before the main loop starts to ensure UI is rendered correctly.
+        invoke(apply_macos_rendering_workaround, delay=0.1)
         app.run()
     else:
         game_manager.run_headless_simulation()
